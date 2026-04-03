@@ -11,7 +11,11 @@ backend/app/ai/weights/*.h5
 backend/app/ai/weights/*.pkl
 *.csv
 *.xlsx
-
+backend/.venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.env
+backend/dataset/
 # Node.js (Frontend)
 node_modules/
 .next/

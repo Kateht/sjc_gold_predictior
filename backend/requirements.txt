@@ -8,3 +8,6 @@ tensorflow
 scikit-learn
 joblib
 python-multipart
+matplotlib
+pydantic
+google-generativeai
