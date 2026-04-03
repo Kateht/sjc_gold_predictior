@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# AI Models & Data (Không đẩy lên GitHub)
+backend/app/ai/weights/*.h5
+backend/app/ai/weights/*.pkl
+*.csv
+*.xlsx
+
+# Node.js (Frontend)
+node_modules/
+.next/
+out/
+build/
+.DS_Store
+*.local
