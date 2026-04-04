@@ -1,10 +1,9 @@
-import yfinance as yf
-import pandas as pd
 from datetime import datetime
-from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-DATA_PATH = BASE_DIR / "dataset" / "final_dataset_new.csv"
+import pandas as pd
+import yfinance as yf
+
+from app.ai.utils import load_price_history_frame
 
 # Hằng số quy đổi: 1 Ounce = 0.82945 Lượng
 OZ_TO_TAEL = 0.82945
@@ -31,15 +30,14 @@ def get_overview_data():
     # ==========================================
     domestic_data = {}
     try:
-        df = pd.read_csv(DATA_PATH)
-        df["Date"] = pd.to_datetime(df["Date"])
-        df.sort_values("Date", inplace=True)
-        
-        today_sjc = float(df["SJC"].iloc[-1])
-        yesterday_sjc = float(df["SJC"].iloc[-2])
+        df = load_price_history_frame("sjc")
+        df = df.sort_values("date").reset_index(drop=True)
+
+        today_sjc = float(df["price"].iloc[-1])
+        yesterday_sjc = float(df["price"].iloc[-2])
         change_sjc = today_sjc - yesterday_sjc
         change_pct_sjc = (change_sjc / yesterday_sjc) * 100
-        trend_sjc = df["SJC"].tail(7).tolist()
+        trend_sjc = df["price"].tail(7).tolist()
         
         domestic_data = {
             "current_price_vnd": round(today_sjc, 2),
@@ -60,18 +58,17 @@ def get_overview_data():
     world_data = {}
     converted_world_sjc = 0
     try:
-        gold = yf.Ticker("GC=F")
-        # Lấy 10 ngày để đảm bảo lọc ra đủ 7 ngày giao dịch thực tế (bỏ T7, CN)
-        hist = gold.history(period="10d") 
+        world_frame = load_price_history_frame("world")
+        hist = world_frame.sort_values("date").reset_index(drop=True)
         
         if hist.empty:
             raise Exception("No data from yfinance")
             
-        today_usd = float(hist["Close"].iloc[-1])
-        yesterday_usd = float(hist["Close"].iloc[-2])
+        today_usd = float(hist["price"].iloc[-1])
+        yesterday_usd = float(hist["price"].iloc[-2])
         change_usd = today_usd - yesterday_usd
         change_pct_usd = (change_usd / yesterday_usd) * 100
-        trend_usd = hist["Close"].tail(7).tolist()
+        trend_usd = hist["price"].tail(7).tolist()
         
         world_data = {
             "current_price_usd": round(today_usd, 2),

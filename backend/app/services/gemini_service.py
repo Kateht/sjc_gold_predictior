@@ -1,14 +1,20 @@
-from unittest import result
+from __future__ import annotations
+
+import re
+import warnings
+
+warnings.simplefilter("ignore", FutureWarning)
 
 import google.generativeai as genai
+
 from app.core.config import settings
 from app.ai.engine import GoldPredictionEngine
-from app.ai.utils import load_and_preprocess_data
+from app.ai.utils import load_and_preprocess_data1
 
 class GoldAIService:
     def __init__(self):
         self.engine = GoldPredictionEngine()
-        self.df_diff, self.last_price = load_and_preprocess_data("dataset/final_dataset_new.csv")
+        self.df_diff, self.last_price = load_and_preprocess_data1("dataset/final_dataset.csv")
         prompt_system = """
         Bạn là một Trợ lý AI Chuyên gia Phân tích Vàng SJC cao cấp.
         
@@ -45,38 +51,41 @@ class GoldAIService:
         """Dự đoán XU HƯỚNG Tăng/Giảm của giá vàng ngày mai kèm mức độ tự tin (%)."""
         return self.engine.predict_trend_classification(self.df_diff)
 
-    def fallback_agent(self, question: str):
+    def _extract_days(self, question: str):
         q = question.lower()
+        match = re.search(r"(\d+)\s*(ngày|day|days)", q)
+        if match:
+            return max(1, min(365, int(match.group(1))))
 
-    # Parse số ngày từ câu hỏi
-        days = 1
         if "30" in q or "tháng" in q or "month" in q:
-            days = 30
-        elif "14" in q or "2 tuần" in q:
-            days = 14
-        elif "7" in q or "tuần" in q or "week" in q:
-            days = 7
-        elif "3" in q:
-            days = 3
-        elif "5" in q:
-            days = 5
-        elif "10" in q:
-            days = 10        
+            return 30
+        if "14" in q or "2 tuần" in q:
+            return 14
+        if "7" in q or "tuần" in q or "week" in q:
+            return 7
+        if "5" in q:
+            return 5
+        if "3" in q:
+            return 3
+        return 1
+
+    def fallback_agent(self, question: str):
+        days = self._extract_days(question)
         result = self.engine.predict_future(self.df_diff, self.last_price, days)
         preds = result["predictions"]
         trend = result["trend"]
-        answer = f"""📊 Dự đoán giá vàng {days} ngày tới:
+        answer = f"""Du doan gia vang {days} ngay toi:
 
-    🔹 Xu hướng: {trend}
-    🔹 Giá bắt đầu: {preds[0]:,.2f} triệu
-    🔹 Giá kết thúc: {preds[-1]:,.2f} triệu
+    Xu huong: {trend}
+    Gia bat dau: {preds[0]:,.2f} trieu
+    Gia ket thuc: {preds[-1]:,.2f} trieu
 
-    📈 Chi tiết theo ngày:
+    Chi tiet theo ngay:
     """
         for i, p in enumerate(preds, 1):
-            answer += f"  Ngày {i}: {p:,.2f} triệu\n"
+            answer += f"  Ngay {i}: {p:,.2f} trieu\n"
 
-        answer += f"\n👉 Nhận định: Giá vàng có xu hướng {trend} trong {days} ngày tới."
+        answer += f"\nNhan dinh: Gia vang co xu huong {trend} trong {days} ngay toi."
 
         return answer.strip()
 
@@ -84,13 +93,18 @@ class GoldAIService:
         try:
             response = self.gemini_model.generate_content(question)
             
-            # Kiểm tra xem Gemini có muốn gọi Tool không
-            if response.candidates[0].content.parts[0].function_call:
-                fc = response.candidates[0].content.parts[0].function_call
+            # TÌM TẤT CẢ CÁC PARTS, XEM CÓ PART NÀO GỌI TOOL KHÔNG
+            fc = None
+            if response.candidates and response.candidates[0].content.parts:
+                for part in response.candidates[0].content.parts:
+                    if part.function_call:
+                        fc = part.function_call
+                        break
 
+            if fc:
                 # 1. Nếu Gemini gọi Tool Dự đoán Giá (Regression)
                 if fc.name == "predict_gold_price_tool":
-                    days = int(fc.args["days"])
+                    days = int(fc.args["days"]) if "days" in fc.args else 1
                     result = self.engine.predict_future(self.df_diff, self.last_price, days)
                 
                 # 2. Nếu Gemini gọi Tool Dự đoán Xu hướng (Classification)
@@ -101,22 +115,24 @@ class GoldAIService:
                 else:
                     return f"Lỗi: Không tìm thấy chức năng {fc.name}."
 
-                # 3. Gửi lại kết quả (JSON) của bất kỳ tool nào về cho Gemini
-                final_response = self.gemini_model.generate_content([
-                    question,
-                    {
+                # 3. GỬI KẾT QUẢ CHO GEMINI VỚI LỊCH SỬ CHUẨN (SỬA LỖI Ở ĐÂY)
+                messages = [
+                    {"role": "user", "parts": [question]},
+                    response.candidates[0].content,  # Nhắc cho Gemini nhớ nó vừa gọi Tool gì
+                    {"role": "user", "parts": [{
                         "function_response": {
-                            "name": fc.name, # Dùng luôn fc.name để code tự động khớp tên Tool
+                            "name": fc.name,
                             "response": result
                         }
-                    }
-                ])
-
+                    }]}
+                ]
+                
+                final_response = self.gemini_model.generate_content(messages)
                 return final_response.text
 
             # Nếu Gemini chỉ trả lời text bình thường (không gọi tool)
             return response.text
 
         except Exception as e:
-            print(f"❌ Lỗi Gemini/Model: {e}") # In ra Terminal để bạn dễ debug
+            print(f"❌ Lỗi Gemini/Model: {e}") 
             return self.fallback_agent(question)

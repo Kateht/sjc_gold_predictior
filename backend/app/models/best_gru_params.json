@@ -1,0 +1,9 @@
+{
+    "units1": 64,
+    "units2": 32,
+    "units3": 16,
+    "dropout_rate": 0.15,
+    "learning_rate": 0.001,
+    "optimizer": "adam",
+    "batch_size": 16
+}

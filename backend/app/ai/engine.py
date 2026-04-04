@@ -1,8 +1,9 @@
-import joblib
-import numpy as np
 from app.core.config import settings
 import tensorflow as tf
 import keras
+import numpy as np
+import pandas as pd
+import joblib
 
 # --- Patch để xử lý version mismatch khi load model .h5 ---
 _original_dense_init = keras.layers.Dense.__init__
@@ -36,6 +37,7 @@ class GoldPredictionEngine:
             f"{settings.MODEL_DIR}/sjc_classification.h5", 
             compile=False
         )
+
     def predict_future(self, df_diff, last_actual_sjc_price, days: int):
         print("Predict reg")
         latest_data_diff = df_diff.tail(self.best_k)[self.feature_cols]
@@ -119,3 +121,55 @@ class GoldPredictionEngine:
             "up_probability": round(float(up_prob), 2),
             "down_probability": round(float(down_prob), 2)
         }
+
+
+# Global engine instance for backward compatibility
+_engine = None
+
+def _get_engine():
+    global _engine
+    if _engine is None:
+        _engine = GoldPredictionEngine()
+    return _engine
+
+
+def forecast_price_path(history_prices, days, strategy="default"):
+    """Forecast price path using the prediction engine."""
+    # Convert history_prices to the format expected by the engine
+    # Assuming history_prices is a list of prices
+    if not history_prices:
+        return []
+    
+    # Create a simple dataframe from history prices
+    import pandas as pd
+    df = pd.DataFrame({"price": history_prices})
+    df["date"] = pd.date_range(end=pd.Timestamp.now(), periods=len(history_prices), freq="D")
+    
+    # Use the engine to predict
+    engine = _get_engine()
+    result = engine.predict_future(df, history_prices[-1], days)
+    return result["predictions"]
+
+
+def classify_price_path(last_price, predicted_prices):
+    """Classify price trend using the prediction engine."""
+    # Create a simple dataframe for trend classification
+    import pandas as pd
+    # Need some historical data for classification
+    # For now, create dummy data - this might need adjustment based on actual requirements
+    dummy_history = [last_price] * 15  # Assume we need at least 15 data points
+    df = pd.DataFrame({"price": dummy_history})
+    df["date"] = pd.date_range(end=pd.Timestamp.now(), periods=len(dummy_history), freq="D")
+    
+    engine = _get_engine()
+    result = engine.predict_trend_classification(df)
+    
+    # Return format expected by prediction_service: (trend_predictions, trend_scores, trend)
+    trend = result["predicted_trend"]
+    confidence = result["confidence_percent"]
+    
+    # Create dummy trend predictions and scores based on the result
+    trend_predictions = [trend] * len(predicted_prices) if predicted_prices else [trend]
+    trend_scores = [confidence] * len(trend_predictions)
+    
+    return trend_predictions, trend_scores, trend
