@@ -1,0 +1,83 @@
+
+--- 2026-04-04T08:36:50 ---
+Run started: 2026-04-04T08:36:50
+Config file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\logs\run_20260404.log
+
+Gold Updater CLI
+Data paths:
+- Config file:   E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gold_cli.json
+- VN gold CSV:   E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.csv
+- XAUUSD cache:  E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\stooq_cache\xauusd_stooq_d.csv
+- USD/VND cache: stooq_cache/usd_vnd_close_yf.csv
+- Backup CSV:    E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.bak.csv
+- VN gold USD/OZ: gia_vang_pnj_sjc_usd_oz.csv
+- Final USO USD/OZ merged: final_uso_usd_with_vn_gold_usd_oz.csv
+- Final USO USD/OZ imputed: final_uso_usd_with_vn_gold_usd_oz_imputed.csv
+- Final USO VND/1000: final_uso_with_vn_gold_vnd_thousand_imputed.csv
+- Log dir:       E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\logs
+- Lock file:     E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.lock
+Nhấn Ctrl+C bất kỳ lúc nào để dừng an toàn (có checkpoint/save).
+
+Chọn tác vụ:
+  1) Update (crawl) theo khoảng ngày
+  2) Refresh XAUUSD cache trong stooq_cache
+  3) Update + refresh XAUUSD cache đến hôm nay
+  4) Pipeline đầy đủ (update + refresh + merge)
+  5) Update final_uso_usd.csv
+  6) Report missing trong khoảng ngày
+  7) In config hiện tại
+  8) In lại đường dẫn file
+  0) Thoát
+Nhập lựa chọn: Start date (dd/mm/YYYY (vd: 26/03/2026) hoặc YYYY-mm-dd hoặc 'today') (default 26/03/2026): Forward-fill các ngày trống? [Y/N] (default Y): Bfill đầu range (để fill ngày đầu nếu thiếu)? [Y/N] (default N): Giảm log (ít in từng ngày)? [Y/N] (default N): Sleep giữa requests (seconds, default 0.15): Crawling 03/04/2026... (missing: PNJ_gia_mua, PNJ_gia_ban, SJC_gia_mua, SJC_gia_ban)
+Crawling 04/04/2026... (missing: PNJ_gia_mua, PNJ_gia_ban, SJC_gia_mua, SJC_gia_ban)
+Saved CSV: inserted=2, updated_missing=0 -> E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.csv
+Update + XAUUSD cache refresh done: range=26/03/2026→04/04/2026, rows_or_cells=4
+Update + Backfill: crawled=2, inserted=2, updated_rows=0, crawl_filled_cells=8, forward_fill_cells=0, total_filled=8
+Update + Backfill: rows=6093, range=2009-07-22 -> 2026-04-04
+Update + Backfill: missing% by column
+  - PNJ_gia_mua: 16.462%
+  - PNJ_gia_ban: 16.462%
+  - SJC_gia_mua: 6.959%
+  - SJC_gia_ban: 6.959%
+Chọn tác vụ:
+  1) Update (crawl) theo khoảng ngày
+  2) Refresh XAUUSD cache trong stooq_cache
+  3) Update + refresh XAUUSD cache đến hôm nay
+  4) Pipeline đầy đủ (update + refresh + merge)
+  5) Update final_uso_usd.csv
+  6) Report missing trong khoảng ngày
+  7) In config hiện tại
+  8) In lại đường dẫn file
+  0) Thoát
+Nhập lựa chọn: Current config:
+- config_path: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gold_cli.json
+- csv_path: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.csv
+- xauusd_cache_path: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\stooq_cache\xauusd_stooq_d.csv
+- usd_vnd_cache_path: stooq_cache/usd_vnd_close_yf.csv
+- backup_csv_path: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.bak.csv
+- final_uso_csv: final_uso_usd.csv
+- vn_gold_usd_oz_csv: gia_vang_pnj_sjc_usd_oz.csv
+- final_uso_usd_with_vn_gold_usd_oz_csv: final_uso_usd_with_vn_gold_usd_oz.csv
+- final_uso_usd_with_vn_gold_usd_oz_imputed_csv: final_uso_usd_with_vn_gold_usd_oz_imputed.csv
+- final_uso_with_vn_gold_vnd_thousand_imputed_csv: final_uso_with_vn_gold_vnd_thousand_imputed.csv
+- log_dir: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\logs
+- lock_path: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.lock
+- default_start_date: 26/03/2026
+- default_forward_fill: True
+- default_bfill_initial: False
+- default_sleep_seconds: 0.15
+- checkpoint_every: 200
+- progress_every: 50
+- quiet: False
+Chọn tác vụ:
+  1) Update (crawl) theo khoảng ngày
+  2) Refresh XAUUSD cache trong stooq_cache
+  3) Update + refresh XAUUSD cache đến hôm nay
+  4) Pipeline đầy đủ (update + refresh + merge)
+  5) Update final_uso_usd.csv
+  6) Report missing trong khoảng ngày
+  7) In config hiện tại
+  8) In lại đường dẫn file
+  0) Thoát
+Nhập lựa chọn: 

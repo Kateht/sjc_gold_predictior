@@ -1,0 +1,20 @@
+{
+  "csv_path": "gia_vang_pnj_sjc.csv",
+  "xauusd_cache_path": "stooq_cache/xauusd_stooq_d.csv",
+  "usd_vnd_cache_path": "stooq_cache/usd_vnd_close_yf.csv",
+  "backup_csv_path": "gia_vang_pnj_sjc.bak.csv",
+  "log_dir": "logs",
+  "lock_path": "gia_vang_pnj_sjc.lock",
+  "default_start_date": "26/03/2026",
+  "default_forward_fill": true,
+  "default_bfill_initial": false,
+  "default_sleep_seconds": 0.15,
+  "checkpoint_every": 200,
+  "progress_every": 50,
+  "quiet": false,
+  "final_uso_csv": "final_uso_usd.csv",
+  "vn_gold_usd_oz_csv": "gia_vang_pnj_sjc_usd_oz.csv",
+  "final_uso_usd_with_vn_gold_usd_oz_csv": "final_uso_usd_with_vn_gold_usd_oz.csv",
+  "final_uso_usd_with_vn_gold_usd_oz_imputed_csv": "final_uso_usd_with_vn_gold_usd_oz_imputed.csv",
+  "final_uso_with_vn_gold_vnd_thousand_imputed_csv": "final_uso_with_vn_gold_vnd_thousand_imputed.csv"
+}

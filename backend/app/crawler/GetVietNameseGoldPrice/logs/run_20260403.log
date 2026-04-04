@@ -1,0 +1,31 @@
+
+--- 2026-04-03T17:17:18 ---
+Run started: 2026-04-03T17:17:18
+Config file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\logs\run_20260403.log
+Current config:
+- config_path: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gold_cli.json
+- csv_path: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.csv
+- xauusd_cache_path: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\xauusd_stooq_d.csv
+- backup_csv_path: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.bak.csv
+- log_dir: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\logs
+- lock_path: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.lock
+- default_start_date: 26/03/2026
+- default_forward_fill: True
+- default_bfill_initial: False
+- default_sleep_seconds: 0.15
+- checkpoint_every: 200
+- progress_every: 50
+- quiet: False
+
+--- 2026-04-03T17:17:48 ---
+Run started: 2026-04-03T17:17:48
+Config file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\logs\run_20260403.log
+Data paths:
+- Config file:   E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gold_cli.json
+- VN gold CSV:   E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.csv
+- XAUUSD cache:  E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\xauusd_stooq_d.csv
+- Backup CSV:    E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.bak.csv
+- Log dir:       E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\logs
+- Lock file:     E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\GetVietNameseGoldPrice\gia_vang_pnj_sjc.lock
