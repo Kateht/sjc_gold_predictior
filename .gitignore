@@ -22,5 +22,8 @@ node_modules/
 .next/
 out/
 build/
+dist/
+*.tsbuildinfo
+frontend/_check.txt
 .DS_Store
 *.local
