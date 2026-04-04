@@ -1,0 +1,12 @@
+.env
+.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache/
+.mypy_cache/
+app/crawler/GetVietNameseGoldPrice/.venv/
+app/crawler/GetVietNameseGoldPrice/logs/
+app/crawler/GetVietNameseGoldPrice/stooq_cache/
+app/crawler/GetVietNameseGoldPrice/*.lock

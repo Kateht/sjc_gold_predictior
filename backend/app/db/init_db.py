@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import hash_password
-from app.db.models import DatasetSource, GoldSourceLink, MLModel, NewsCategory, User
+from app.db.models import DatasetSource, GoldSourceLink, MLModel, NewsArticle, NewsCategory, User
 
 
 def seed_default_admin(db: Session) -> None:
@@ -78,22 +78,109 @@ def seed_default_models(db: Session) -> None:
             "is_active": True,
         },
         {
-            "code": "lstm-price-v1",
-            "name": "LSTM Price Model Placeholder",
+            "code": "sjc-classification-v1",
+            "name": "SJC Direction Classifier",
+            "prediction_kind": "trend",
+            "provider": "artifact",
+            "artifact_path": "app/models/sjc_classification.h5",
+            "description": "Artifact-backed classifier for direction bias on the SJC series",
+            "config_json": {"feature_window": 10},
+            "metrics_json": {"accuracy": None},
+            "is_default": False,
+            "is_active": True,
+        },
+        {
+            "code": "lstm-k10-price-v1",
+            "name": "LSTM K10 Price Model",
             "prediction_kind": "price",
             "provider": "artifact",
-            "artifact_path": settings.PRIMARY_PRICE_MODEL_ARTIFACT_PATH,
-            "description": "Artifact-backed slot for a future LSTM or hybrid model",
-            "config_json": {"strategy": "artifact_or_linear"},
+            "artifact_path": "app/models/lstm_k10.keras",
+            "description": "Sequence model trained on a 10-step lookback window",
+            "config_json": {"lookback": 10},
             "metrics_json": {"mae": None, "rmse": None},
             "is_default": False,
-            "is_active": False,
+            "is_active": True,
+        },
+        {
+            "code": "best-gru-price-v1",
+            "name": "Best GRU Price Model",
+            "prediction_kind": "price",
+            "provider": "artifact",
+            "artifact_path": "app/models/best_gru_model.h5",
+            "description": "Primary GRU artifact for price forecasting",
+            "config_json": {"architecture": "gru"},
+            "metrics_json": {"mae": None, "rmse": None},
+            "is_default": False,
+            "is_active": True,
+        },
+        {
+            "code": "best-gru-base-price-v1",
+            "name": "Best GRU Base Price Model",
+            "prediction_kind": "price",
+            "provider": "artifact",
+            "artifact_path": "app/models/best_gru_model_base.h5",
+            "description": "Baseline GRU artifact for comparative forecasting",
+            "config_json": {"architecture": "gru_base"},
+            "metrics_json": {"mae": None, "rmse": None},
+            "is_default": False,
+            "is_active": True,
+        },
+        {
+            "code": "best-knn-price-v1",
+            "name": "Best KNN Price Model",
+            "prediction_kind": "price",
+            "provider": "artifact",
+            "artifact_path": "app/models/best_knn_model.pkl",
+            "description": "KNN artifact for short horizon price patterns",
+            "config_json": {"neighbors": 5},
+            "metrics_json": {"mae": None, "rmse": None},
+            "is_default": False,
+            "is_active": True,
+        },
+        {
+            "code": "bagged-knn-price-v1",
+            "name": "Bagged KNN Price Model",
+            "prediction_kind": "price",
+            "provider": "artifact",
+            "artifact_path": "app/models/bagged_knn_model.pkl",
+            "description": "Bagged KNN ensemble for smoother price estimates",
+            "config_json": {"ensemble": "bagging"},
+            "metrics_json": {"mae": None, "rmse": None},
+            "is_default": False,
+            "is_active": True,
+        },
+        {
+            "code": "meta-price-v1",
+            "name": "Meta Price Ensemble",
+            "prediction_kind": "price",
+            "provider": "artifact",
+            "artifact_path": "app/models/meta.pkl",
+            "description": "Stacked meta model that blends price forecasts",
+            "config_json": {"ensemble": "stacked"},
+            "metrics_json": {"mae": None, "rmse": None},
+            "is_default": False,
+            "is_active": True,
+        },
+        {
+            "code": "meta-lstm-k10-price-v1",
+            "name": "Meta LSTM K10 Ensemble",
+            "prediction_kind": "price",
+            "provider": "artifact",
+            "artifact_path": "app/models/meta_lstm_k10.pkl",
+            "description": "Meta learner for the LSTM K10 pipeline",
+            "config_json": {"ensemble": "meta_lstm"},
+            "metrics_json": {"mae": None, "rmse": None},
+            "is_default": False,
+            "is_active": True,
         },
     ]
 
-    existing_codes = {model.code for model in db.query(MLModel).all()}
+    existing_models = {model.code: model for model in db.query(MLModel).all()}
     for payload in default_models:
-        if payload["code"] in existing_codes:
+        model = existing_models.get(payload["code"])
+        if model:
+            for field_name, field_value in payload.items():
+                setattr(model, field_name, field_value)
             continue
         db.add(MLModel(**payload))
 
@@ -102,17 +189,127 @@ def seed_default_models(db: Session) -> None:
 
 def seed_default_news_categories(db: Session, admin_id: int | None = None) -> None:
     categories = [
-        {"slug": "economy", "name": "Kinh tế", "description": "Tin kinh tế vĩ mô và thị trường", "sort_order": 1},
-        {"slug": "politics", "name": "Chính trị", "description": "Tin chính sách và địa chính trị", "sort_order": 2},
-        {"slug": "gold", "name": "Giá vàng", "description": "Tin về SJC, PNJ và thị trường vàng", "sort_order": 3},
-        {"slug": "related", "name": "Liên quan", "description": "Tin liên quan đến FX, lãi suất, hàng hóa", "sort_order": 4},
+        {"slug": "economy", "name": "Macro Economy", "description": "Macroeconomic releases and market context", "sort_order": 1},
+        {"slug": "politics", "name": "Central Banks", "description": "Policy, rates, and geopolitical headlines", "sort_order": 2},
+        {"slug": "gold", "name": "Gold Market", "description": "SJC, PNJ, and bullion market updates", "sort_order": 3},
+        {"slug": "related", "name": "FX & Commodities", "description": "USD/VND, yields, and cross-asset context", "sort_order": 4},
     ]
 
-    existing_slugs = {item.slug for item in db.query(NewsCategory).all()}
+    existing_categories = {item.slug: item for item in db.query(NewsCategory).all()}
     for payload in categories:
-        if payload["slug"] in existing_slugs:
+        category = existing_categories.get(payload["slug"])
+        if category:
+            for field_name, field_value in payload.items():
+                setattr(category, field_name, field_value)
+            if admin_id is not None:
+                category.created_by_id = admin_id
             continue
         db.add(NewsCategory(**payload, created_by_id=admin_id))
+
+    db.commit()
+
+
+def seed_default_news_articles(db: Session, admin_id: int | None = None) -> None:
+    now = datetime.now(timezone.utc)
+    categories = {item.slug: item for item in db.query(NewsCategory).all()}
+    articles = [
+        {
+            "slug": "gold-holds-firm-as-yields-ease",
+            "category_slug": "politics",
+            "title": "Gold Holds Firm as Yields Ease",
+            "summary": "A softer yield backdrop keeps bullion supported while traders wait for the next policy signal.",
+            "content": "US yields eased modestly and that gave gold a stable bid through the session. Market participants are watching whether that calm continues into the next data release.",
+            "source_name": "Market Brief",
+            "source_url": None,
+            "image_url": None,
+            "published_at": now - timedelta(hours=4),
+            "is_featured": True,
+            "is_active": True,
+        },
+        {
+            "slug": "sjc-premium-stays-elevated",
+            "category_slug": "gold",
+            "title": "SJC Premium Stays Elevated Ahead of Local Demand",
+            "summary": "Domestic SJC quotes remain above the implied world-price conversion, keeping the local spread in focus.",
+            "content": "The SJC market is still trading with a meaningful premium versus the world price after currency conversion. Buyers continue to track both local liquidity and the next move in USD/VND.",
+            "source_name": "Research Desk",
+            "source_url": None,
+            "image_url": None,
+            "published_at": now - timedelta(hours=9),
+            "is_featured": True,
+            "is_active": True,
+        },
+        {
+            "slug": "macro-data-keeps-safe-haven-demand-in-view",
+            "category_slug": "economy",
+            "title": "Macro Data Keeps Safe-Haven Demand in View",
+            "summary": "Mixed macro signals leave room for defensive positioning across precious metals.",
+            "content": "Investors are balancing softer growth indicators against still-sticky inflation expectations. That combination can keep safe-haven demand alive even without a sharp risk-off shock.",
+            "source_name": "Macro Monitor",
+            "source_url": None,
+            "image_url": None,
+            "published_at": now - timedelta(days=1, hours=2),
+            "is_featured": True,
+            "is_active": True,
+        },
+        {
+            "slug": "usd-vnd-stability-keeps-import-costs-visible",
+            "category_slug": "related",
+            "title": "USD/VND Stability Keeps Import Costs Visible",
+            "summary": "A steady FX backdrop limits volatility in the converted domestic gold price.",
+            "content": "When USD/VND stays stable, local gold tends to move more directly with bullion and domestic demand. Traders are watching whether the next macro print changes that balance.",
+            "source_name": "FX Watch",
+            "source_url": None,
+            "image_url": None,
+            "published_at": now - timedelta(days=1, hours=6),
+            "is_featured": False,
+            "is_active": True,
+        },
+        {
+            "slug": "central-bank-clarity-keeps-market-calm",
+            "category_slug": "politics",
+            "title": "Central Bank Clarity Keeps the Market Calm",
+            "summary": "Clearer rate expectations reduce the odds of a sudden swing in bullion pricing.",
+            "content": "Rate guidance remains the biggest macro variable for gold traders. The more predictable the policy path, the easier it is to frame a short-term forecast.",
+            "source_name": "Policy Desk",
+            "source_url": None,
+            "image_url": None,
+            "published_at": now - timedelta(days=2),
+            "is_featured": True,
+            "is_active": True,
+        },
+        {
+            "slug": "retail-flow-keeps-the-gold-window-open",
+            "category_slug": "gold",
+            "title": "Retail Flow Keeps the Gold Window Open",
+            "summary": "Seasonal buying interest is helping keep local gold demand resilient.",
+            "content": "Retail demand does not need to be explosive to matter. Even a steady flow of buying can help support domestic premiums and keep the chart from flattening too early.",
+            "source_name": "Retail Pulse",
+            "source_url": None,
+            "image_url": None,
+            "published_at": now - timedelta(days=2, hours=5),
+            "is_featured": False,
+            "is_active": True,
+        },
+    ]
+
+    existing_articles = {item.slug: item for item in db.query(NewsArticle).all()}
+    for payload in articles:
+        category = categories.get(payload["category_slug"])
+        if category is None:
+            continue
+
+        article_payload = {key: value for key, value in payload.items() if key != "category_slug"}
+        existing = existing_articles.get(article_payload["slug"])
+        if existing:
+            for field_name, field_value in article_payload.items():
+                setattr(existing, field_name, field_value)
+            existing.category_id = category.id
+            if admin_id is not None:
+                existing.created_by_id = admin_id
+            continue
+
+        db.add(NewsArticle(category_id=category.id, created_by_id=admin_id, **article_payload))
 
     db.commit()
 
