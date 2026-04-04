@@ -8,10 +8,12 @@ from app.db.init_db import (
     seed_default_dataset_sources,
     seed_default_gold_sources,
     seed_default_models,
+    seed_default_news_articles,
     seed_default_news_categories,
 )
+from app.db.base import Base
 from app.db.models import User
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine
 
 
 def seed_database(db: Session) -> None:
@@ -19,11 +21,13 @@ def seed_database(db: Session) -> None:
     admin = db.query(User).filter(User.email == settings.DEFAULT_ADMIN_EMAIL).first()
     seed_default_models(db)
     seed_default_news_categories(db, admin_id=admin.id if admin else None)
+    seed_default_news_articles(db, admin_id=admin.id if admin else None)
     seed_default_gold_sources(db, admin_id=admin.id if admin else None)
     seed_default_dataset_sources(db, admin_id=admin.id if admin else None)
 
 
 def run_seed() -> None:
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         seed_database(db)

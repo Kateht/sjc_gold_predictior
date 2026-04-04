@@ -18,6 +18,7 @@ from app.api.predict_router import router as predict_router
 from app.api.source_router import router as source_router
 from app.core.config import settings
 from app.core.exception_handlers import register_exception_handlers
+from app.db.seed import run_seed
 
 
 app = FastAPI(title=settings.APP_TITLE)
@@ -32,6 +33,11 @@ app.add_middleware(
 )
 
 register_exception_handlers(app)
+
+
+@app.on_event("startup")
+def bootstrap_database():
+    run_seed()
 
 
 app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
