@@ -4,7 +4,7 @@ def load_and_preprocess_data(csv_path: str):
     from pathlib import Path
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
     
-    csv_path = BASE_DIR / "dataset" / "final_dataset_new.csv"
+    csv_path = BASE_DIR / "dataset" / "final_dataset.csv"
     
     
     if not csv_path.exists():

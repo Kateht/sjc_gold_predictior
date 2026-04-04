@@ -4,10 +4,13 @@ pandas
 numpy
 yfinance
 pandas_datareader
-tensorflow
+tensorflow==2.15.0
+tf-keras==2.15.0
 scikit-learn
 joblib
 python-multipart
 matplotlib
 pydantic
+pydantic-settings
 google-generativeai
+protobuf>=4.25.3,<5.0.0
