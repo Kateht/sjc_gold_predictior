@@ -18,7 +18,7 @@ export function Sparkline({ values, labels, accent = '#c9921d', height = 128, cl
     return <div className={`sparkline sparkline--empty ${className ?? ''}`.trim()}>No data</div>;
   }
 
-  const width = 100;
+  const width = 320;
   const padding = 8;
   const min = Math.min(...values);
   const max = Math.max(...values);
