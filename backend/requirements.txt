@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pandas
 numpy
 yfinance
@@ -10,4 +10,12 @@ joblib
 python-multipart
 matplotlib
 pydantic
+pydantic-settings
 google-generativeai
+SQLAlchemy
+psycopg2-binary
+passlib
+python-jose[cryptography]
+email-validator
+requests
+alembic
