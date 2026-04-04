@@ -4,7 +4,6 @@ from typing import Iterable
 
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LinearRegression
 
 from app.ai.utils import build_recent_prices_from_diffs
 
@@ -51,11 +50,11 @@ def forecast_price_path(history_prices: Iterable[float], days: int, strategy: st
             predictions.append(round(max(0.0, float(current)), 4))
         return predictions
 
-    x = np.arange(len(prices), dtype=float).reshape(-1, 1)
+    x = np.arange(len(prices), dtype=float)
     y = np.asarray(prices, dtype=float)
-    model = LinearRegression().fit(x, y)
-    future_x = np.arange(len(prices), len(prices) + days, dtype=float).reshape(-1, 1)
-    predictions = model.predict(future_x)
+    slope, intercept = np.polyfit(x, y, 1)
+    future_x = np.arange(len(prices), len(prices) + days, dtype=float)
+    predictions = slope * future_x + intercept
     return [round(max(0.0, float(value)), 4) for value in predictions]
 
 

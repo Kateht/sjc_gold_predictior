@@ -1,17 +1,29 @@
-FROM python:3.11-slim
+# syntax=docker/dockerfile:1.7
+FROM python:3.11.12-slim-bookworm
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r /app/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && pip install --prefer-binary -r /app/requirements.txt
 
-COPY alembic.ini /app/alembic.ini
-COPY alembic /app/alembic
-COPY app /app/app
+RUN addgroup --system app && adduser --system --ingroup app app
+
+COPY --chown=app:app alembic.ini /app/alembic.ini
+COPY --chown=app:app alembic /app/alembic
+COPY --chown=app:app app /app/app
+COPY --chown=app:app dataset /app/dataset
+COPY --chown=app:app entrypoint.sh /app/entrypoint.sh
+
+RUN chmod +x /app/entrypoint.sh
+
+USER app
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["/app/entrypoint.sh"]

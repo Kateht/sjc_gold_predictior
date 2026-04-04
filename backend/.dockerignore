@@ -1,11 +1,16 @@
 .env
 .venv/
+.git/
+.gitignore
+tests/
+gold_prediction.db
 **/__pycache__/
 **/*.pyc
 **/*.pyo
 **/*.pyd
 .pytest_cache/
 .mypy_cache/
+*.log
 app/crawler/GetVietNameseGoldPrice/.venv/
 app/crawler/GetVietNameseGoldPrice/logs/
 app/crawler/GetVietNameseGoldPrice/stooq_cache/
