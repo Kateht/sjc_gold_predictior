@@ -10,6 +10,31 @@ from app.core.security import hash_password
 from app.db.models import DatasetSource, GoldSourceLink, MLModel, NewsArticle, NewsCategory, User
 
 
+def seed_default_admin(db: Session) -> None:
+    if not settings.AUTO_SEED_ADMIN:
+        return
+
+    hashed_password = hash_password(settings.DEFAULT_ADMIN_PASSWORD)
+    admin = db.query(User).filter(User.email == settings.DEFAULT_ADMIN_EMAIL).first()
+    if admin:
+        admin.name = "Admin"
+        admin.hashed_password = hashed_password
+        admin.role = "admin"
+        admin.is_active = True
+    else:
+        db.add(
+            User(
+                name="Admin",
+                email=settings.DEFAULT_ADMIN_EMAIL,
+                hashed_password=hashed_password,
+                role="admin",
+                is_active=True,
+            )
+        )
+
+    db.commit()
+
+
 def seed_default_models(db: Session) -> None:
     default_models = [
         {

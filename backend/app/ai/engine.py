@@ -28,10 +28,10 @@ class GoldPredictionEngine:
         self.feature_cols = self.meta["feature_columns"]
         # 2. LOAD MODEL PHÂN LOẠI (DỰ ĐOÁN XU HƯỚNG)
         # ======================================
-        self.scaler_X_clf = joblib.load(f"{settings.MODEL_DIR}/scaler_X_classification.pkl")
+        self.scaler_X_clf = joblib.load(f"{settings.MODEL_DIR}/scaler_X.pkl")
 
         # Load meta riêng cho classification
-        self.meta_clf = joblib.load(f"{settings.MODEL_DIR}/meta_sjc_classification.pkl")
+        self.meta_clf = joblib.load(f"{settings.MODEL_DIR}/meta.pkl")
         self.clf_features = self.meta_clf["features"] 
         self.clf_time_steps = self.meta_clf["time_steps"] # Giá trị 15
         self.dl_model_clf = tf.keras.models.load_model(

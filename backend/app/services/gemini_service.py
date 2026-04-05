@@ -13,7 +13,12 @@ from app.core.config import settings
 class GoldAIService:
     def __init__(self):
         self.engine = GoldPredictionEngine()
-        self.df_raw, self.df_diff, self.last_price = load_and_preprocess_data_for_gemini("dataset/final_dataset.csv")
+        self.dataset_path = "dataset/final_dataset.csv"
+        self.df_raw = None
+        self.df_diff = None
+        self.last_price = None
+        self._dataset_loaded = False
+        self._load_dataset_if_available()
         prompt_system = """
         Bạn là một Trợ lý AI Chuyên gia Phân tích Vàng SJC cao cấp.
         CÁCH LỰA CHỌN CÔNG CỤ DỰ ĐOÁN GIÁ:
@@ -45,15 +50,35 @@ class GoldAIService:
             system_instruction=prompt_system
         )
 
+    def _load_dataset_if_available(self) -> bool:
+        if self._dataset_loaded:
+            return True
+
+        try:
+            self.df_raw, self.df_diff, self.last_price = load_and_preprocess_data_for_gemini(self.dataset_path)
+            self._dataset_loaded = True
+            return True
+        except FileNotFoundError:
+            self.df_raw = None
+            self.df_diff = None
+            self.last_price = None
+            return False
+
     def predict_gold_price_lstm_tool(self, days: int):
         """Dự đoán giá vàng trong tương lai."""
+        if not self._load_dataset_if_available():
+            return {"error": f"Không tìm thấy dataset tại: {self.dataset_path}"}
         return self.engine.predict_future_lstm(self.df_diff, self.last_price, days)
     
     def predict_gold_price_xgboost_tool(self, days: int):
         """Dự đoán giá vàng trong tương lai bằng XGBoost."""
+        if not self._load_dataset_if_available():
+            return {"error": f"Không tìm thấy dataset tại: {self.dataset_path}"}
         return self.engine.predict_future_xgb(self.df_raw, days) # Đổi thành df_raw
     def predict_gold_trend_tool(self):
         """Dự đoán XU HƯỚNG Tăng/Giảm của giá vàng ngày mai kèm mức độ tự tin (%)."""
+        if not self._load_dataset_if_available():
+            return {"error": f"Không tìm thấy dataset tại: {self.dataset_path}"}
         return self.engine.predict_trend_classification(self.df_diff)
 
     def _extract_days(self, question: str):
@@ -193,6 +218,8 @@ class GoldAIService:
     def fallback_agent(self, question: str):
         days = self._extract_days(question)
         # Sửa lỗi: Gọi đúng tên hàm predict_future_lstm
+        if not self._load_dataset_if_available():
+            return f"Không tìm thấy dataset tại: {self.dataset_path}. Chưa thể tạo dự báo."
         result = self.engine.predict_future_lstm(self.df_diff, self.last_price, days)
         preds = result["predictions"]
         trend = result["trend"]
