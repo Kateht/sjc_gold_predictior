@@ -101,4 +101,9 @@ Werkzeug==3.1.8
 wrapt==2.1.2
 yfinance==1.2.0
 sqlalchemy
-jose
+SQLAlchemy
+psycopg2-binary
+passlib
+python-jose[cryptography]
+email-validator
+alembic
