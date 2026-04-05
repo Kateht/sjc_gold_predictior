@@ -8,14 +8,18 @@ warnings.simplefilter("ignore", FutureWarning)
 import google.generativeai as genai
 
 from app.ai.engine import GoldPredictionEngine
-from app.ai.utils import load_and_preprocess_data1
-
+from app.ai.utils import load_and_preprocess_data_for_gemini
+from app.core.config import settings
 class GoldAIService:
     def __init__(self):
         self.engine = GoldPredictionEngine()
-        self.df_diff, self.last_price = load_and_preprocess_data1("dataset/final_dataset.csv")
+        self.df_raw, self.df_diff, self.last_price = load_and_preprocess_data_for_gemini("dataset/final_dataset.csv")
         prompt_system = """
         Bạn là một Trợ lý AI Chuyên gia Phân tích Vàng SJC cao cấp.
+        CÁCH LỰA CHỌN CÔNG CỤ DỰ ĐOÁN GIÁ:
+        - Nếu người dùng KHÔNG chỉ định rõ, hãy dùng `predict_gold_price_lstm_tool` (LSTM Model mặc định).
+        - Nếu người dùng yêu cầu dùng "XGBoost", "Mô hình cây", hoặc "ML", hãy gọi `predict_gold_price_xgboost_tool`.
+        - Nếu người dùng hỏi xu hướng, gọi `predict_gold_trend_tool`.
         
         1. NẾU BẠN SỬ DỤNG CÔNG CỤ DỰ ĐOÁN XU HƯỚNG (Classification Tool):
         Hãy trình bày kết quả trả về theo đúng format sau:
@@ -37,15 +41,17 @@ class GoldAIService:
         genai.configure(api_key=settings.GEMINI_API_KEY)
         self.gemini_model = genai.GenerativeModel(
             model_name="gemini-2.5-flash-lite",
-            tools=[self.predict_gold_price_tool, self.predict_gold_trend_tool], # Thêm tool ở đây
+            tools=[self.predict_gold_price_lstm_tool, self.predict_gold_trend_tool, self.predict_gold_price_xgboost_tool], # Thêm tool ở đây
             system_instruction=prompt_system
         )
 
-    def predict_gold_price_tool(self, days: int):
+    def predict_gold_price_lstm_tool(self, days: int):
         """Dự đoán giá vàng trong tương lai."""
-        return self.engine.predict_future(self.df_diff, self.last_price, days)
+        return self.engine.predict_future_lstm(self.df_diff, self.last_price, days)
     
-
+    def predict_gold_price_xgboost_tool(self, days: int):
+        """Dự đoán giá vàng trong tương lai bằng XGBoost."""
+        return self.engine.predict_future_xgb(self.df_raw, days) # Đổi thành df_raw
     def predict_gold_trend_tool(self):
         """Dự đoán XU HƯỚNG Tăng/Giảm của giá vàng ngày mai kèm mức độ tự tin (%)."""
         return self.engine.predict_trend_classification(self.df_diff)
@@ -186,7 +192,8 @@ class GoldAIService:
 
     def fallback_agent(self, question: str):
         days = self._extract_days(question)
-        result = self.engine.predict_future(self.df_diff, self.last_price, days)
+        # Sửa lỗi: Gọi đúng tên hàm predict_future_lstm
+        result = self.engine.predict_future_lstm(self.df_diff, self.last_price, days)
         preds = result["predictions"]
         trend = result["trend"]
         answer = f"""Du doan gia vang {days} ngay toi:
@@ -217,12 +224,18 @@ class GoldAIService:
                         break
 
             if fc:
-                # 1. Nếu Gemini gọi Tool Dự đoán Giá (Regression)
-                if fc.name == "predict_gold_price_tool":
+                # 1. Nếu Gemini gọi LSTM (Sửa lại đúng tên)
+                if fc.name == "predict_gold_price_lstm_tool":
                     days = int(fc.args["days"]) if "days" in fc.args else 1
-                    result = self.engine.predict_future(self.df_diff, self.last_price, days)
+                    result = self.engine.predict_future_lstm(self.df_diff, self.last_price, days)
                 
-                # 2. Nếu Gemini gọi Tool Dự đoán Xu hướng (Classification)
+                # 2. Nếu Gemini gọi XGBoost (Thêm nhánh bị thiếu này vào)
+                elif fc.name == "predict_gold_price_xgboost_tool":
+                    days = int(fc.args["days"]) if "days" in fc.args else 1
+                    # Truyền df_raw và KHÔNG cần truyền self.last_price
+                    result = self.engine.predict_future_xgb(self.df_raw, days)
+
+                # 3. Nếu Gemini gọi Tool Dự đoán Xu hướng
                 elif fc.name == "predict_gold_trend_tool":
                     result = self.engine.predict_trend_classification(self.df_diff)
                 
@@ -230,7 +243,7 @@ class GoldAIService:
                 else:
                     return f"Lỗi: Không tìm thấy chức năng {fc.name}."
 
-                # 3. GỬI KẾT QUẢ CHO GEMINI VỚI LỊCH SỬ CHUẨN (SỬA LỖI Ở ĐÂY)
+                # 3. GỬI KẾT QUẢ CHO GEMINI VỚI LỊCH SỬ CHUẨN
                 messages = [
                     {"role": "user", "parts": [question]},
                     response.candidates[0].content,  # Nhắc cho Gemini nhớ nó vừa gọi Tool gì
@@ -245,7 +258,7 @@ class GoldAIService:
                 final_response = self.gemini_model.generate_content(messages)
                 return final_response.text
 
-            # Nếu Gemini chỉ trả lời text bình thường (không gọi tool)
+            # Nếu Gemini chỉ trả lời text bình thường
             return response.text
 
         except Exception as e:

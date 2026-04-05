@@ -264,7 +264,7 @@ export function DashboardPage() {
           <Sparkline
             values={visibleChart.prices}
             labels={visibleChart.dates}
-            height={140}
+            height={112}
             className="sparkline--hero"
             highlightIndex={chartActiveIndex}
             onPointSelect={setChartSelectedIndex}

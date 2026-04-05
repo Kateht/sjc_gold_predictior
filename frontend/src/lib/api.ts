@@ -228,6 +228,10 @@ export async function fetchNewsArticles(category?: string, featured = false, lim
   });
 }
 
+export async function fetchNewsArticleBySlug(slug: string): Promise<NewsArticleRead> {
+  return request<NewsArticleRead>(`/news/articles/${slug}`, { auth: false });
+}
+
 export async function fetchPricePrediction(params: { days: number; model?: string; source?: string; range?: string }): Promise<PricePredictionResponse> {
   return request<PricePredictionResponse>('/predict', {
     params: {

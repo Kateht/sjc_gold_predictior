@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import logging
+
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.ai.engine import classify_price_path, forecast_price_path
+from app.ai.engine import classify_price_path, forecast_price_path, predict_trend_path
 from app.ai.utils import build_future_dates
 from app.db.models import PredictionRecord, User
 from app.schemas.models import ModelRead, PredictionKind
@@ -11,10 +15,64 @@ from app.services.market_service import load_history_for_source
 from app.services.model_service import resolve_prediction_model
 
 
+logger = logging.getLogger(__name__)
+
+
 class PredictionService:
     def __init__(self, db: Session, current_user: User | None = None):
         self.db = db
         self.current_user = current_user
+
+    def _fallback_strategy(self, prediction_kind: PredictionKind | str, model_identifier: str | None) -> str:
+        identifier = (model_identifier or "").strip().lower()
+        if prediction_kind == PredictionKind.trend or str(prediction_kind) == PredictionKind.trend.value:
+            return "slope"
+        if "momentum" in identifier:
+            return "momentum"
+        if "mean-reversion" in identifier or "mean_reversion" in identifier:
+            return "mean_reversion"
+        return "linear"
+
+    def _fallback_provider(self, model_identifier: str | None) -> str:
+        identifier = (model_identifier or "").strip().lower()
+        artifact_codes = {
+            "meta-lstm-k10-price-v1",
+            "lstm-k10-price-v1",
+            "sjc-classification-v1",
+        }
+        if identifier in artifact_codes:
+            return "artifact"
+        return "builtin"
+
+    def _build_fallback_model_read(self, prediction_kind: PredictionKind, model_identifier: str | None) -> ModelRead:
+        code = (model_identifier or "").strip() or (
+            "linear-price-v1" if prediction_kind == PredictionKind.price else "trend-slope-v1"
+        )
+        now = datetime.now(timezone.utc)
+        return ModelRead(
+            id=0,
+            code=code,
+            name=code,
+            prediction_kind=prediction_kind,
+            provider=self._fallback_provider(code),
+            artifact_path=None,
+            description="Fallback model metadata used because the model registry could not be read.",
+            config_json={"strategy": self._fallback_strategy(prediction_kind, code)},
+            metrics_json={},
+            is_active=True,
+            is_default=False,
+            created_at=now,
+            updated_at=now,
+        )
+
+    def _resolve_model_or_fallback(self, identifier: str | None, prediction_kind: PredictionKind):
+        try:
+            model = resolve_prediction_model(self.db, identifier, prediction_kind)
+            return model, ModelRead.model_validate(model)
+        except SQLAlchemyError as exc:
+            fallback_model = self._build_fallback_model_read(prediction_kind, identifier)
+            logger.warning("Model registry lookup failed; using fallback model metadata: %s", exc)
+            return fallback_model, fallback_model
 
     def _model_strategy(self, model) -> str:
         config = model.config_json or {}
@@ -35,7 +93,7 @@ class PredictionService:
     ) -> None:
         record = PredictionRecord(
             user_id=self.current_user.id if self.current_user else None,
-            model_id=model.id,
+            model_id=getattr(model, "id", None) or None,
             prediction_kind=prediction_kind,
             source=source,
             input_range=range_value,
@@ -45,15 +103,26 @@ class PredictionService:
             trend_label=trend_label,
             used_fallback=used_fallback,
         )
-        self.db.add(record)
-        self.db.commit()
+        try:
+            self.db.add(record)
+            self.db.commit()
+        except SQLAlchemyError as exc:
+            self.db.rollback()
+            logger.warning("Prediction result returned, but saving prediction history failed: %s", exc)
 
     def predict_price(self, *, days: int, model_identifier: str | None = None, source: str = "sjc", range_value: str | None = None) -> PricePredictionResponse:
         history_frame, normalized_source = load_history_for_source(source)
-        selected_model = resolve_prediction_model(self.db, model_identifier, PredictionKind.price)
+        selected_model, selected_model_read = self._resolve_model_or_fallback(model_identifier, PredictionKind.price)
         strategy = self._model_strategy(selected_model)
         history_prices = history_frame["price"].tolist()
-        predictions = forecast_price_path(history_prices, days, strategy=strategy)
+        predictions, used_fallback = forecast_price_path(
+            history_prices,
+            days,
+            strategy=strategy,
+            provider=selected_model.provider,
+            model_code=selected_model.code,
+            source=normalized_source,
+        )
         trend_predictions, trend_scores, trend = classify_price_path(history_prices[-1], predictions)
         future_dates = build_future_dates(history_frame["date"].iloc[-1], days)
 
@@ -74,32 +143,37 @@ class PredictionService:
             range_value=range_value,
             payload=payload,
             trend_label=trend,
-            used_fallback=selected_model.provider == "artifact",
+            used_fallback=used_fallback,
         )
 
         return PricePredictionResponse(
             future_dates=future_dates,
             predictions=predictions,
             trend=trend,
-            selected_model=ModelRead.model_validate(selected_model),
+            selected_model=selected_model_read,
             source=normalized_source,
-            used_fallback=selected_model.provider == "artifact",
+            used_fallback=used_fallback,
         )
 
     def predict_trend(self, *, days: int, model_identifier: str | None = None, source: str = "sjc", range_value: str | None = None) -> TrendPredictionResponse:
         history_frame, normalized_source = load_history_for_source(source)
-        selected_model = resolve_prediction_model(self.db, model_identifier, PredictionKind.trend)
+        selected_model, selected_model_read = self._resolve_model_or_fallback(model_identifier, PredictionKind.trend)
         strategy = self._model_strategy(selected_model)
         history_prices = history_frame["price"].tolist()
-        predicted_prices = forecast_price_path(history_prices, days, strategy=strategy)
-        trend_predictions, trend_scores, _ = classify_price_path(history_prices[-1], predicted_prices)
+        trend_predictions, trend_scores, used_fallback = predict_trend_path(
+            history_prices,
+            days,
+            strategy=strategy,
+            provider=selected_model.provider,
+            model_code=selected_model.code,
+            source=normalized_source,
+        )
         future_dates = build_future_dates(history_frame["date"].iloc[-1], days)
 
         payload = {
             "future_dates": future_dates,
             "trend_predictions": trend_predictions,
             "trend_scores": trend_scores,
-            "predicted_prices": predicted_prices,
             "source": normalized_source,
             "strategy": strategy,
         }
@@ -111,14 +185,14 @@ class PredictionService:
             range_value=range_value,
             payload=payload,
             trend_label=trend_predictions[-1] if trend_predictions else "flat",
-            used_fallback=selected_model.provider == "artifact",
+            used_fallback=used_fallback,
         )
 
         return TrendPredictionResponse(
             future_dates=future_dates,
             trend_predictions=trend_predictions,
             trend_scores=trend_scores,
-            selected_model=ModelRead.model_validate(selected_model),
+            selected_model=selected_model_read,
             source=normalized_source,
-            used_fallback=selected_model.provider == "artifact",
+            used_fallback=used_fallback,
         )

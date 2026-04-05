@@ -11,6 +11,7 @@ env/
 # AI Models & Data (Không đẩy lên GitHub)
 backend/app/ai/weights/*.h5
 backend/app/ai/weights/*.keras
+backend/app/ai/weights/*.json
 
 backend/app/ai/weights/*.pkl
 *.csv

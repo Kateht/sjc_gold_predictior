@@ -148,31 +148,7 @@ def seed_default_models(db: Session) -> None:
             "metrics_json": {"mae": None, "rmse": None},
             "is_default": False,
             "is_active": True,
-        },
-        {
-            "code": "meta-price-v1",
-            "name": "Meta Price Ensemble",
-            "prediction_kind": "price",
-            "provider": "artifact",
-            "artifact_path": "app/models/meta.pkl",
-            "description": "Stacked meta model that blends price forecasts",
-            "config_json": {"ensemble": "stacked"},
-            "metrics_json": {"mae": None, "rmse": None},
-            "is_default": False,
-            "is_active": True,
-        },
-        {
-            "code": "meta-lstm-k10-price-v1",
-            "name": "Meta LSTM K10 Ensemble",
-            "prediction_kind": "price",
-            "provider": "artifact",
-            "artifact_path": "app/models/meta_lstm_k10.pkl",
-            "description": "Meta learner for the LSTM K10 pipeline",
-            "config_json": {"ensemble": "meta_lstm"},
-            "metrics_json": {"mae": None, "rmse": None},
-            "is_default": False,
-            "is_active": True,
-        },
+        }
     ]
 
     existing_models = {model.code: model for model in db.query(MLModel).all()}
