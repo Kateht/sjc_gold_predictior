@@ -296,40 +296,15 @@ export function DashboardPage() {
         {chartError ? <div className="empty-state">Chart unavailable: {chartError}</div> : null}
 
         {!chartLoading && !chartError && visibleChart.prices.length ? (
-          chartView === 'chart' ? (
-            <div className="prediction-chart">
-              <Sparkline
-                values={visibleChart.prices}
-                labels={visibleChart.dates}
-                height={104}
-                className="sparkline--hero"
-                highlightIndex={chartActiveIndex}
-                onPointSelect={setChartSelectedIndex}
-                onPointHover={setChartHoverIndex}
-              />
-
-              <div className="forecast-summary">
-                <div>
-                  <p className="eyebrow">Selected point</p>
-                  <h4>{chartActiveDate}</h4>
-                  <p>Use the source picker and range controls to inspect the series in detail.</p>
-                </div>
-                <div className="forecast-summary__value">
-                  <strong>{chartActivePriceLabel}</strong>
-                  <span className="badge badge--neutral">{chartSourceLabel}</span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="chart-number-grid">
-              {visibleChart.dates.map((date, index) => (
-                <div key={`${date}-${index}`} className="chart-number-card">
-                  <span className="chart-number-card__date">{date}</span>
-                  <strong>{formatMarketPrice(visibleChart.prices[index], chartSource)}</strong>
-                </div>
-              ))}
-            </div>
-          )
+          <Sparkline
+            values={visibleChart.prices}
+            labels={visibleChart.dates}
+            height={112}
+            className="sparkline--hero"
+            highlightIndex={chartActiveIndex}
+            onPointSelect={setChartSelectedIndex}
+            onPointHover={setChartHoverIndex}
+          />
         ) : null}
 
         {!chartLoading && !chartError && !visibleChart.prices.length ? <div className="empty-state">No data found for the selected range.</div> : null}

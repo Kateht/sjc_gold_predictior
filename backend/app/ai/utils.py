@@ -5,6 +5,7 @@ from pathlib import Path
 import math
 from typing import Iterable
 
+import numpy as np
 import pandas as pd
 import yfinance as yf
 
@@ -89,9 +90,193 @@ def _coerce_history_frame(frame: pd.DataFrame) -> pd.DataFrame:
 
 def _read_csv_history(path: str | Path) -> pd.DataFrame:
     csv_path = Path(path)
+
+def load_and_preprocess_data1(csv_path: str):
+    import pandas as pd
+    import numpy as np
+    from pathlib import Path
+    
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    csv_path = BASE_DIR / "dataset" / "final_dataset.csv"
+    
     if not csv_path.exists():
         raise FileNotFoundError(str(csv_path))
-    return _coerce_history_frame(pd.read_csv(csv_path))
+        
+    # 1. Đọc Raw Data
+    df_raw = pd.read_csv(csv_path, index_col=0, parse_dates=True)
+    if 'Unnamed: 0' in df_raw.columns:
+        df_raw.drop(columns=['Unnamed: 0'], inplace=True)
+        
+    # 2. Tính Ma trận sai phân (Vì Engine của bạn dùng df_diff)
+    df_diff = df_raw.diff().dropna()
+    df_diff.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df_diff.fillna(0, inplace=True)
+    
+    # 3. Lấy giá chốt sổ
+    last_price = df_raw['SJC'].iloc[-1] if 'SJC' in df_raw.columns else 0
+    
+    # Trả về ĐÚNG 2 BỘ DỮ LIỆU mà __init__ đang cần
+    return df_diff, last_price
+def load_and_preprocess_data_for_gemini(csv_path: str):
+    import pandas as pd
+    import numpy as np
+    from pathlib import Path
+    
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    actual_path = BASE_DIR / "dataset" / "final_dataset.csv"
+    
+    if not actual_path.exists():
+        raise FileNotFoundError(f"Không tìm thấy file tại: {actual_path}")
+        
+    # Đọc dữ liệu gốc
+    df_raw = pd.read_csv(actual_path, index_col=0, parse_dates=True)
+    if 'Unnamed: 0' in df_raw.columns:
+        df_raw.drop(columns=['Unnamed: 0'], inplace=True)
+        
+    # Tính sai phân
+    df_diff = df_raw.diff().dropna()
+    df_diff.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df_diff.fillna(0, inplace=True)
+    
+    # Lấy giá cuối
+    last_price = df_raw['SJC'].iloc[-1] if 'SJC' in df_raw.columns else 0
+    
+    # TRẢ VỀ ĐỦ 3 BIẾN CHO GEMINI
+    return df_raw, df_diff, last_price
+
+def _read_csv_history(path: str | Path) -> pd.DataFrame:
+    csv_path = Path(path)
+    if not csv_path.exists():
+        raise FileNotFoundError(str(csv_path))
+
+    attempts = (
+        {"index_col": 0, "parse_dates": True},
+        {"parse_dates": [0]},
+        {},
+    )
+    last_error: Exception | None = None
+    for read_kwargs in attempts:
+        try:
+            frame = pd.read_csv(csv_path, **read_kwargs)
+            return _coerce_history_frame(frame)
+        except Exception as exc:
+            last_error = exc
+
+    raise ValueError(f"Could not load history CSV from {csv_path}") from last_error
+
+
+def _coerce_feature_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    working = frame.copy()
+    if "Unnamed: 0" in working.columns:
+        working = working.drop(columns=["Unnamed: 0"])
+
+    date_column = _detect_date_column(working)
+    if date_column is None and not isinstance(working.index, pd.RangeIndex):
+        working = working.reset_index()
+        date_column = _detect_date_column(working) or working.columns[0]
+
+    if date_column is None:
+        raise ValueError("Could not detect a usable date column")
+
+    if date_column != "date":
+        working = working.rename(columns={date_column: "date"})
+
+    working["date"] = pd.to_datetime(working["date"], errors="coerce")
+    working = working.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
+    if working.empty:
+        raise ValueError("Feature frame is empty after cleaning")
+    return working
+
+
+def _read_feature_csv(path: str | Path) -> pd.DataFrame:
+    csv_path = Path(path)
+    if not csv_path.exists():
+        raise FileNotFoundError(str(csv_path))
+
+    attempts = (
+        {"index_col": 0, "parse_dates": True},
+        {"parse_dates": [0]},
+        {},
+    )
+    last_error: Exception | None = None
+    for read_kwargs in attempts:
+        try:
+            frame = pd.read_csv(csv_path, **read_kwargs)
+            return _coerce_feature_frame(frame)
+        except Exception as exc:
+            last_error = exc
+
+    raise ValueError(f"Could not load feature CSV from {csv_path}") from last_error
+
+
+def _feature_dataset_candidates(csv_path: str | Path | None = None) -> list[Path]:
+    base_dir = Path(__file__).resolve().parents[2]
+    candidates: list[Path] = []
+    if csv_path:
+        candidate = Path(csv_path).expanduser()
+        if not candidate.is_absolute():
+            candidate = (base_dir / candidate).resolve()
+        candidates.append(candidate)
+
+    candidates.extend(
+        [
+            (base_dir / "dataset" / "final_dataset.csv").resolve(),
+            (base_dir / "dataset" / "final_dataset_new.csv").resolve(),
+            Path(settings.LOCAL_DATASET_PATH),
+            Path(settings.CRAWLER_DATASET_PATH),
+        ]
+    )
+
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        deduped.append(candidate)
+        seen.add(key)
+    return deduped
+
+
+def load_feature_dataset_frame(csv_path: str | Path | None = None, required_columns: Iterable[str] | None = None) -> pd.DataFrame:
+    required = set(required_columns or [])
+    last_error: Exception | None = None
+
+    for candidate in _feature_dataset_candidates(csv_path):
+        try:
+            frame = _read_feature_csv(candidate)
+        except Exception as exc:
+            last_error = exc
+            continue
+
+        if required and not required.issubset(set(frame.columns)):
+            last_error = ValueError(f"Missing required feature columns in {candidate}")
+            continue
+        return frame
+
+    raise FileNotFoundError("No usable feature dataset CSV was found") from last_error
+
+
+def load_feature_prediction_data(csv_path: str | Path | None = None, required_columns: Iterable[str] | None = None):
+    frame = load_feature_dataset_frame(csv_path=csv_path, required_columns=required_columns)
+    if "SJC" not in frame.columns:
+        raise ValueError("Feature dataset must contain an SJC column")
+
+    numeric_columns = [column for column in frame.columns if column != "date"]
+    working = frame.copy()
+    working[numeric_columns] = working[numeric_columns].apply(pd.to_numeric, errors="coerce")
+    working = working.dropna(subset=["SJC"]).sort_values("date").reset_index(drop=True)
+    working[numeric_columns] = working[numeric_columns].ffill().bfill().fillna(0.0)
+
+    last_price = float(working["SJC"].iloc[-1])
+    df_diff = working[numeric_columns].diff().dropna().reset_index(drop=True)
+    df_diff = df_diff.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    return df_diff, last_price, working
+
+
+def load_and_preprocess_data1(csv_path: str):
+    df_diff, last_price, _ = load_feature_prediction_data(csv_path=csv_path)
+    return df_diff, last_price
 
 
 def _fetch_world_history(period: str = "2y") -> pd.DataFrame:

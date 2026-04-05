@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import { askAssistant } from '@/lib/api';
+import { RichMessage } from '@/components/RichMessage';
 
 type AssistantRole = 'assistant' | 'user';
 
@@ -19,12 +20,28 @@ const defaultSuggestions = [
 ];
 
 const routeSuggestions: Record<string, string[]> = {
-  '/': ['Bạn là ai?', 'So sánh các model đang active', 'Chart 30 ngày đang nói gì?'],
-  '/predict': ['Dự báo 7 ngày tới cho SJC', 'So sánh model price và trend', 'Giải thích kết quả dự báo gần nhất'],
+  '/': [
+  'Dự báo giá vàng SJC trong 7 ngày tới(LSTM)', 
+  'Dùng mô hình XGBoost để đoán giá vàng 5 ngày tới', 
+  'Xu hướng giá vàng ngày mai là tăng hay giảm?(Classification)'
+],
+  '/predict': [
+  'Dự báo giá vàng SJC trong 7 ngày tới(LSTM)', 
+  'Dùng mô hình XGBoost để đoán giá vàng 5 ngày tới', 
+  'Xu hướng giá vàng ngày mai là tăng hay giảm?(Classification)'
+],
   '/news': ['Tin tức nào đáng chú ý nhất?', 'Nhóm tin nào đang tác động mạnh tới vàng?', 'Có headline nào về lãi suất không?'],
   '/history': ['Xu hướng lịch sử 30 ngày là gì?', 'Tìm điểm đảo chiều gần nhất', 'Xuất CSV lịch sử ra sao?'],
-  '/admin': ['Model nào đang active?', 'Cách đổi default model là gì?', 'Crawler gần nhất chạy thế nào?'],
-  '/login': ['Hệ thống này hỗ trợ những gì?', 'Tôi có thể xem forecast gì sau khi đăng nhập?', 'App đang theo dõi dữ liệu nào?'],
+  '/admin': [
+  'Dự báo giá vàng SJC trong 7 ngày tới(LSTM)', 
+  'Dùng mô hình XGBoost để đoán giá vàng 5 ngày tới', 
+  'Xu hướng giá vàng ngày mai là tăng hay giảm?(Classification)'
+],
+  '/login': [
+  'Dự báo giá vàng SJC trong 7 ngày tới(LSTM)', 
+  'Dùng mô hình XGBoost để đoán giá vàng 5 ngày tới', 
+  'Xu hướng giá vàng ngày mai là tăng hay giảm?(Classification)'
+],
 };
 
 function getRouteKey(pathname: string): string {
@@ -153,7 +170,7 @@ export function GlobalAssistant() {
             <div>
               <p className="eyebrow">Global assistant</p>
               <strong>{getRouteTitle(location.pathname)}</strong>
-              <span>Ask about price, forecast, model lineup, news, history, or admin flows.</span>
+              {/* <span>Ask about price, forecast, model lineup, news, history, or admin flows.</span> */}
             </div>
             <button type="button" className="button button--ghost assistant-dock__close" onClick={() => setIsOpen(false)}>
               Close
@@ -164,7 +181,7 @@ export function GlobalAssistant() {
             {messages.map((message) => (
               <article key={message.id} className={`assistant-message assistant-message--${message.role}`}>
                 <span className="assistant-message__label">{message.role === 'assistant' ? 'Assistant' : 'You'}</span>
-                <p>{message.content}</p>
+                <RichMessage content={message.content} />
               </article>
             ))}
             {isSending ? (

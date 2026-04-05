@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { askAssistant, fetchModels, fetchPricePrediction, fetchTrendPrediction } from '@/lib/api';
 import { formatMarketPrice, formatNumber } from '@/lib/format';
 import { getUserFacingModelLabel } from '@/lib/modelLabels';
+import { RichMessage } from '@/components/RichMessage';
 import { Sparkline } from '@/components/Sparkline';
 import type { ModelRead, PricePredictionResponse, TrendPredictionResponse } from '@/types';
 
@@ -496,7 +497,7 @@ export function PredictPage() {
             {assistantMessages.map((message) => (
               <div key={message.id} className={`chat-bubble ${message.role === 'assistant' ? 'chat-bubble--assistant' : 'chat-bubble--user'}`}>
                 <span className="chat-bubble__label">{message.role === 'assistant' ? 'Assistant' : 'You'}</span>
-                <p>{message.content}</p>
+                <RichMessage content={message.content} />
               </div>
             ))}
             {assistantLoading ? (

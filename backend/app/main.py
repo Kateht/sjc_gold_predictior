@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.predict_router import router as predict_router
 
 from app.api.admin_router import router as admin_router
 from app.api.admin_crawler_router import router as admin_crawler_router

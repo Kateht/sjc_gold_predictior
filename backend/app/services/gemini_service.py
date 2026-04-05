@@ -8,84 +8,55 @@ warnings.simplefilter("ignore", FutureWarning)
 import google.generativeai as genai
 
 from app.ai.engine import GoldPredictionEngine
-from app.ai.utils import load_and_preprocess_data
+from app.ai.utils import load_and_preprocess_data_for_gemini
 from app.core.config import settings
-
-
-ALLOWED_TOPIC_KEYWORDS = (
-    "gold",
-    "vàng",
-    "sjc",
-    "pnj",
-    "giá",
-    "price",
-    "forecast",
-    "dự báo",
-    "dự đoán",
-    "trend",
-    "xu hướng",
-    "model",
-    "mô hình",
-    "news",
-    "tin tức",
-    "history",
-    "lịch sử",
-    "export",
-    "csv",
-    "admin",
-    "đăng nhập",
-    "đăng ký",
-    "login",
-    "register",
-    "spread",
-    "arbitrage",
-    "usd",
-    "vnd",
-    "biểu đồ",
-    "chart",
-)
-
-IDENTITY_PATTERNS = (
-    r"\bbạn là ai\b",
-    r"\bem là ai\b",
-    r"\bwho are you\b",
-    r"\bwhat are you\b",
-)
-
-CAPABILITY_PATTERNS = (
-    r"\bbạn có thể\b",
-    r"\bhỗ trợ\b",
-    r"\bhelp\b",
-    r"\bwhat can you do\b",
-    r"\bhướng dẫn\b",
-)
-
-FORECAST_INTENT_KEYWORDS = (
-    "dự báo",
-    "dự đoán",
-    "forecast",
-    "trend",
-    "xu hướng",
-    "ngày",
-    "day",
-    "week",
-    "tuần",
-    "month",
-    "tháng",
-)
-
-
 class GoldAIService:
     def __init__(self):
         self.engine = GoldPredictionEngine()
-        self.df_diff, self.last_price = load_and_preprocess_data(settings.LOCAL_DATASET_PATH)
-        self.gemini_model = None
+        self.df_raw, self.df_diff, self.last_price = load_and_preprocess_data_for_gemini("dataset/final_dataset.csv")
+        prompt_system = """
+        Bạn là một Trợ lý AI Chuyên gia Phân tích Vàng SJC cao cấp.
+        CÁCH LỰA CHỌN CÔNG CỤ DỰ ĐOÁN GIÁ:
+        - Nếu người dùng KHÔNG chỉ định rõ, hãy dùng `predict_gold_price_lstm_tool` (LSTM Model mặc định).
+        - Nếu người dùng yêu cầu dùng "XGBoost", "Mô hình cây", hoặc "ML", hãy gọi `predict_gold_price_xgboost_tool`.
+        - Nếu người dùng hỏi xu hướng, gọi `predict_gold_trend_tool`.
+        
+        1. NẾU BẠN SỬ DỤNG CÔNG CỤ DỰ ĐOÁN XU HƯỚNG (Classification Tool):
+        Hãy trình bày kết quả trả về theo đúng format sau:
+        📊 Dự báo xu hướng giá vàng SJC: [Tăng/Giảm] [📈/📉]
+        🔹 Tỷ lệ dự đoán Tăng: [up_probability]%
+        🔹 Tỷ lệ dự đoán Giảm: [down_probability]%
+        🔹 Mức độ tự tin (Confidence): [confidence_percent]%
+        👉 Nhận định ngắn gọn từ bạn: [Viết 1 câu khuyên nhà đầu tư]
 
-        if settings.ENABLE_GEMINI and settings.GEMINI_API_KEY:
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            self.gemini_model = genai.GenerativeModel(model_name=settings.GEMINI_MODEL_NAME)
+        2. NẾU BẠN SỬ DỤNG CÔNG CỤ DỰ ĐOÁN GIÁ (Regression Tool):
+        Hãy trình bày kết quả trả về theo đúng format sau:
+        💰 Dự báo giá vàng SJC:
+        🔹 Giá kết thúc kỳ vọng: [Điền giá trị được format có dấu chấm ngăn cách hàng nghìn] VNĐ
+        🔹 Xu hướng chung: [Tăng/Giảm]
+        📈 Quỹ đạo chi tiết:
+        [Liệt kê giá từng ngày]
+        👉 Nhận định ngắn gọn từ bạn: [Viết 1 câu khuyên nhà đầu tư]
+        """
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        self.gemini_model = genai.GenerativeModel(
+            model_name="gemini-2.5-flash-lite",
+            tools=[self.predict_gold_price_lstm_tool, self.predict_gold_trend_tool, self.predict_gold_price_xgboost_tool], # Thêm tool ở đây
+            system_instruction=prompt_system
+        )
 
-    def _extract_days(self, question: str) -> int:
+    def predict_gold_price_lstm_tool(self, days: int):
+        """Dự đoán giá vàng trong tương lai."""
+        return self.engine.predict_future_lstm(self.df_diff, self.last_price, days)
+    
+    def predict_gold_price_xgboost_tool(self, days: int):
+        """Dự đoán giá vàng trong tương lai bằng XGBoost."""
+        return self.engine.predict_future_xgb(self.df_raw, days) # Đổi thành df_raw
+    def predict_gold_trend_tool(self):
+        """Dự đoán XU HƯỚNG Tăng/Giảm của giá vàng ngày mai kèm mức độ tự tin (%)."""
+        return self.engine.predict_trend_classification(self.df_diff)
+
+    def _extract_days(self, question: str):
         q = question.lower()
         match = re.search(r"(\d+)\s*(ngày|day|days)", q)
         if match:
@@ -221,68 +192,75 @@ class GoldAIService:
 
     def fallback_agent(self, question: str):
         days = self._extract_days(question)
-        result = self.engine.predict_future(self.df_diff, self.last_price, days)
-        return self._format_answer(days, result)
+        # Sửa lỗi: Gọi đúng tên hàm predict_future_lstm
+        result = self.engine.predict_future_lstm(self.df_diff, self.last_price, days)
+        preds = result["predictions"]
+        trend = result["trend"]
+        answer = f"""Du doan gia vang {days} ngay toi:
 
-    def _summarize_with_gemini(self, question: str, days: int, result: dict[str, object]) -> str | None:
-        if self.gemini_model is None:
-            return None
+    Xu huong: {trend}
+    Gia bat dau: {preds[0]:,.2f} trieu
+    Gia ket thuc: {preds[-1]:,.2f} trieu
 
-        predictions = [float(value) for value in (result.get("predictions") or [])]  # type: ignore[arg-type]
-        if not predictions:
-            return None
+    Chi tiet theo ngay:
+    """
+        for i, p in enumerate(preds, 1):
+            answer += f"  Ngay {i}: {p:,.2f} trieu\n"
 
-        prompt = (
-            "Bạn là trợ lý chuyên về giá vàng, dự báo, mô hình, tin tức, lịch sử và quản trị ứng dụng. "
-            "Chỉ trả lời các chủ đề liên quan đến giá vàng. Nếu câu hỏi không liên quan, hãy từ chối ngắn gọn. "
-            "Hãy viết một đoạn tóm tắt ngắn, rõ ràng, bằng tiếng Việt, tối đa 3 câu, không lan man. "
-            f"Câu hỏi: {question}\n"
-            f"Số ngày dự báo: {days}\n"
-            f"Xu hướng: {result.get('trend', 'flat')}\n"
-            f"Mức đầu: {predictions[0]:,.2f} triệu VND/lượng\n"
-            f"Mức cuối: {predictions[-1]:,.2f} triệu VND/lượng\n"
-        )
+        answer += f"\nNhan dinh: Gia vang co xu huong {trend} trong {days} ngay toi."
 
-        try:
-            response = self.gemini_model.generate_content(prompt)
-            text = getattr(response, "text", None)
-            if not text:
-                return None
-            cleaned = str(text).strip()
-            lowered = cleaned.lower()
-            if not any(keyword in lowered for keyword in ALLOWED_TOPIC_KEYWORDS):
-                return None
-            return cleaned
-        except Exception:
-            return None
+        return answer.strip()
 
     async def get_answer(self, question: str):
-        if self._is_identity_question(question):
-            return self._identity_answer()
+        try:
+            response = self.gemini_model.generate_content(question)
+            
+            # TÌM TẤT CẢ CÁC PARTS, XEM CÓ PART NÀO GỌI TOOL KHÔNG
+            fc = None
+            if response.candidates and response.candidates[0].content.parts:
+                for part in response.candidates[0].content.parts:
+                    if part.function_call:
+                        fc = part.function_call
+                        break
 
-        if self._is_capability_question(question):
-            return self._capability_answer()
+            if fc:
+                # 1. Nếu Gemini gọi LSTM (Sửa lại đúng tên)
+                if fc.name == "predict_gold_price_lstm_tool":
+                    days = int(fc.args["days"]) if "days" in fc.args else 1
+                    result = self.engine.predict_future_lstm(self.df_diff, self.last_price, days)
+                
+                # 2. Nếu Gemini gọi XGBoost (Thêm nhánh bị thiếu này vào)
+                elif fc.name == "predict_gold_price_xgboost_tool":
+                    days = int(fc.args["days"]) if "days" in fc.args else 1
+                    # Truyền df_raw và KHÔNG cần truyền self.last_price
+                    result = self.engine.predict_future_xgb(self.df_raw, days)
 
-        if not self._is_relevant_question(question):
-            return (
-                "Tôi chỉ hỗ trợ các chủ đề liên quan đến giá vàng, dự báo, mô hình, tin tức, lịch sử, "
-                "xuất CSV, đăng nhập và admin của ứng dụng này. Hãy hỏi về SJC, biểu đồ, model hoặc tin tức thị trường."
-            )
+                # 3. Nếu Gemini gọi Tool Dự đoán Xu hướng
+                elif fc.name == "predict_gold_trend_tool":
+                    result = self.engine.predict_trend_classification(self.df_diff)
+                
+                # Trường hợp không khớp tool nào
+                else:
+                    return f"Lỗi: Không tìm thấy chức năng {fc.name}."
 
-        if self._is_model_question(question) and not self._is_forecast_intent(question):
-            return self._model_answer()
+                # 3. GỬI KẾT QUẢ CHO GEMINI VỚI LỊCH SỬ CHUẨN
+                messages = [
+                    {"role": "user", "parts": [question]},
+                    response.candidates[0].content,  # Nhắc cho Gemini nhớ nó vừa gọi Tool gì
+                    {"role": "user", "parts": [{
+                        "function_response": {
+                            "name": fc.name,
+                            "response": result
+                        }
+                    }]}
+                ]
+                
+                final_response = self.gemini_model.generate_content(messages)
+                return final_response.text
 
-        if self._is_news_question(question) and not self._is_forecast_intent(question):
-            return self._news_answer()
+            # Nếu Gemini chỉ trả lời text bình thường
+            return response.text
 
-        if self._is_history_question(question) and not self._is_forecast_intent(question):
-            return self._history_answer()
-
-        days = self._extract_days(question)
-        result = self.engine.predict_future(self.df_diff, self.last_price, days)
-
-        if self.gemini_model is None:
-            return self._format_answer(days, result)
-
-        summary = self._summarize_with_gemini(question, days, result)
-        return self._format_answer(days, result, summary=summary)
+        except Exception as e:
+            print(f"❌ Lỗi Gemini/Model: {e}") 
+            return self.fallback_agent(question)
