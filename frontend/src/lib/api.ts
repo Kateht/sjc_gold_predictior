@@ -53,9 +53,9 @@ function buildUrl(path: string, params?: Record<string, QueryValue>): string {
   return url.toString();
 }
 
-function buildHeaders(init?: HeadersInit, auth = true): Headers {
+function buildHeaders(init?: HeadersInit, auth = true, includeJsonContentType = true): Headers {
   const headers = new Headers(init);
-  if (!headers.has('Content-Type')) {
+  if (includeJsonContentType && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
   if (auth) {
@@ -105,9 +105,10 @@ async function refreshStoredSession(): Promise<AuthSession | null> {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth = true, retryOnAuthFailure = true } = options;
+  const includeJsonContentType = options.body !== undefined && options.body !== null;
   const response = await fetch(buildUrl(path, options.params), {
     method: options.method ?? 'GET',
-    headers: buildHeaders(options.headers, auth),
+    headers: buildHeaders(options.headers, auth, includeJsonContentType),
     body: options.body === undefined || options.body === null ? undefined : JSON.stringify(options.body),
   });
 
@@ -135,7 +136,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
 export async function downloadCsv(path: string, filename: string, params?: Record<string, QueryValue>): Promise<void> {
   const response = await fetch(buildUrl(path, params), {
-    headers: buildHeaders(undefined, true),
+    headers: buildHeaders(undefined, true, false),
   });
 
   if (response.status === 401) {
