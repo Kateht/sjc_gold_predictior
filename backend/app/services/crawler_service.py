@@ -36,23 +36,26 @@ def _build_crawler_command(payload: CrawlerRunCreate) -> list[str]:
         sys.executable,
         "-m",
         settings.GOLD_CLI_MODULE,
-        payload.task.value,
         "--config",
         settings.GOLD_CLI_CONFIG_PATH,
+        payload.task.value,
     ]
 
     if payload.start:
         command.extend(["--start", payload.start.isoformat()])
     if payload.end:
         command.extend(["--end", payload.end.isoformat()])
-    if payload.no_forward_fill:
-        command.append("--no-forward-fill")
-    if payload.bfill_initial:
-        command.append("--bfill-initial")
-    if payload.sleep is not None:
-        command.extend(["--sleep", str(payload.sleep)])
-    if payload.quiet:
-        command.append("--quiet")
+
+    # gold_cli only supports these flags for update/update-backfill/pipeline.
+    if payload.task.value in {"update", "update-backfill", "pipeline"}:
+        if payload.no_forward_fill:
+            command.append("--no-forward-fill")
+        if payload.bfill_initial:
+            command.append("--bfill-initial")
+        if payload.sleep is not None:
+            command.extend(["--sleep", str(payload.sleep)])
+        if payload.quiet:
+            command.append("--quiet")
 
     return command
 
@@ -76,7 +79,7 @@ def _run_crawler_task_in_background(run_id: int, payload_data: dict[str, Any]) -
 
         completed = subprocess.run(
             _build_crawler_command(payload),
-            cwd=str(Path(settings.PROJECT_ROOT).parent),
+            cwd=str(Path(settings.PROJECT_ROOT)),
             capture_output=True,
             text=True,
             check=False,

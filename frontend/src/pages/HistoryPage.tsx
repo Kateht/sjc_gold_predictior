@@ -1,13 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { exportMyHistoryCsv, fetchPredictionHistory } from '@/lib/api';
-import { formatDateTime, formatDomesticPrice, formatNumber } from '@/lib/format';
+import { formatDateTime, formatMarketPrice, formatNumber } from '@/lib/format';
 import type { PredictionHistoryRead } from '@/types';
 
 const PAGE_SIZE = 10;
+const kindFilters = [
+  { value: 'all', label: 'All records' },
+  { value: 'price', label: 'Price only' },
+  { value: 'trend', label: 'Trend only' },
+] as const;
 
 export function HistoryPage() {
   const [records, setRecords] = useState<PredictionHistoryRead[]>([]);
+  const [kindFilter, setKindFilter] = useState<(typeof kindFilters)[number]['value']>('all');
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -45,6 +51,25 @@ export function HistoryPage() {
     };
   }, []);
 
+  const filteredRecords = useMemo(() => {
+    if (kindFilter === 'all') {
+      return records;
+    }
+    return records.filter((record) => record.prediction_kind === kindFilter);
+  }, [kindFilter, records]);
+
+  const summary = useMemo(() => {
+    const priceCount = records.filter((record) => record.prediction_kind === 'price').length;
+    const trendCount = records.filter((record) => record.prediction_kind === 'trend').length;
+    const fallbackCount = records.filter((record) => record.used_fallback).length;
+    return {
+      total: records.length,
+      priceCount,
+      trendCount,
+      fallbackCount,
+    };
+  }, [records]);
+
   async function loadMore() {
     setLoadingMore(true);
     setError('');
@@ -79,56 +104,106 @@ export function HistoryPage() {
         <div className="section-title">
           <div>
             <p className="eyebrow">History</p>
-            <h3>Track your prediction history and export it as CSV.</h3>
+            <h3>Prediction history, summarized for quick review.</h3>
+            <p className="section-title__meta">Review past runs by type, model, and source without exposing raw payloads upfront.</p>
           </div>
           <button type="button" className="button button--primary" onClick={() => void handleExport()} disabled={exporting}>
             {exporting ? 'Exporting...' : 'Export CSV'}
           </button>
         </div>
+
+        <div className="metric-grid metric-grid--compact">
+          <article className="metric-card">
+            <span className="metric-card__label">Loaded</span>
+            <strong className="metric-card__value">{summary.total}</strong>
+            <span className="metric-card__meta">Records currently in memory</span>
+          </article>
+          <article className="metric-card">
+            <span className="metric-card__label">Price runs</span>
+            <strong className="metric-card__value">{summary.priceCount}</strong>
+            <span className="metric-card__meta">Price forecasts</span>
+          </article>
+          <article className="metric-card">
+            <span className="metric-card__label">Trend runs</span>
+            <strong className="metric-card__value">{summary.trendCount}</strong>
+            <span className="metric-card__meta">Direction forecasts</span>
+          </article>
+          <article className="metric-card">
+            <span className="metric-card__label">Fallback</span>
+            <strong className="metric-card__value">{summary.fallbackCount}</strong>
+            <span className="metric-card__meta">Runs without the primary model</span>
+          </article>
+        </div>
+
+        <div className="tabs tabs--compact history-filters">
+          {kindFilters.map((option) => (
+            <button key={option.value} type="button" className={`tab ${kindFilter === option.value ? 'is-active' : ''}`} onClick={() => setKindFilter(option.value)}>
+              {option.label}
+            </button>
+          ))}
+        </div>
+
         {error ? <div className="error-state">{error}</div> : null}
         {loading ? <div className="panel panel--compact">Loading history...</div> : null}
       </section>
 
-      <section className="timeline-list">
-        {records.map((record) => {
+      <section className="stack">
+        {filteredRecords.map((record) => {
           const rawPredictions = record.forecast_json['predictions'];
           const predictions = Array.isArray(rawPredictions) ? (rawPredictions as number[]) : [];
           const lastPrediction = predictions.length ? predictions[predictions.length - 1] : null;
           const firstPrediction = predictions.length ? predictions[0] : null;
-          const formatForecastValue = record.prediction_kind === 'price' ? formatDomesticPrice : formatNumber;
+          const formatForecastValue = record.prediction_kind === 'price'
+            ? (value: number) => formatMarketPrice(value, record.source)
+            : (value: number) => formatNumber(value);
 
           return (
-            <article key={record.id} className="timeline-item">
-              <div className="timeline-item__head">
+            <article key={record.id} className="panel stack history-card">
+              <div className="history-card__head">
                 <div>
-                  <strong>{record.prediction_kind.toUpperCase()}</strong>
-                  <p>{formatDateTime(record.created_at)}</p>
+                  <p className="eyebrow">{record.prediction_kind === 'price' ? 'Price forecast' : 'Trend forecast'}</p>
+                  <h3>{record.selected_model_key ?? 'N/A'} · {record.source.toUpperCase()}</h3>
+                  <p className="section-title__meta">{formatDateTime(record.created_at)} · {record.days} days</p>
                 </div>
                 <div className="controls-row">
                   <span className="badge">{record.source}</span>
                   <span className={`badge ${record.used_fallback ? 'badge--negative' : 'badge--positive'}`}>{record.used_fallback ? 'fallback' : 'model'}</span>
                 </div>
               </div>
-              <p>Model: {record.selected_model_key ?? 'N/A'} | Days: {record.days}</p>
+
               <div className="metric-grid metric-grid--compact">
                 <div className="metric-card">
-                  <span className="metric-card__label">Trend</span>
+                  <span className="metric-card__label">Trend label</span>
                   <strong className="metric-card__value">{record.trend_label ?? 'flat'}</strong>
-                  <span className="metric-card__meta">Historical result label</span>
+                  <span className="metric-card__meta">Model output label</span>
                 </div>
                 <div className="metric-card">
                   <span className="metric-card__label">Forecast range</span>
                   <strong className="metric-card__value">{firstPrediction !== null && lastPrediction !== null ? `${formatForecastValue(firstPrediction)} → ${formatForecastValue(lastPrediction)}` : 'N/A'}</strong>
                   <span className="metric-card__meta">From first to last predicted point</span>
                 </div>
+                <div className="metric-card">
+                  <span className="metric-card__label">Payload size</span>
+                  <strong className="metric-card__value">{predictions.length}</strong>
+                  <span className="metric-card__meta">Forecast points stored in the record</span>
+                </div>
+                <div className="metric-card">
+                  <span className="metric-card__label">Source tag</span>
+                  <strong className="metric-card__value">{record.source.toUpperCase()}</strong>
+                  <span className="metric-card__meta">Used for display formatting</span>
+                </div>
               </div>
-              <div className="preview-box">{JSON.stringify(record.forecast_json, null, 2)}</div>
+
+              <details className="history-details">
+                <summary>Forecast payload</summary>
+                <pre className="preview-box">{JSON.stringify(record.forecast_json, null, 2)}</pre>
+              </details>
             </article>
           );
         })}
       </section>
 
-      {!records.length && !loading ? <div className="empty-state">No prediction history yet.</div> : null}
+      {!filteredRecords.length && !loading ? <div className="empty-state">No prediction history matches the selected filter.</div> : null}
 
       {hasMore ? (
         <div className="controls-row">

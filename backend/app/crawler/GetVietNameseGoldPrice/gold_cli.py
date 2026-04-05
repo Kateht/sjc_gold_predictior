@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pandas as pd
 
-import backend.app.crawler.GetVietNameseGoldPrice.Update_gia_vang as ug
-import backend.app.crawler.GetVietNameseGoldPrice.Update_final_uso_usd as uf
-import backend.app.crawler.GetVietNameseGoldPrice.merge_outputs as mo
+import app.crawler.GetVietNameseGoldPrice.Update_gia_vang as ug
+import app.crawler.GetVietNameseGoldPrice.Update_final_uso_usd as uf
+import app.crawler.GetVietNameseGoldPrice.merge_outputs as mo
 
 
 ROOT_DIR = Path(__file__).resolve().parent

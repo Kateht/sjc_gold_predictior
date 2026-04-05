@@ -468,7 +468,13 @@
                 "exec": [
                   "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
                   "const json = pm.response.json();",
-                  "pm.environment.set('adminToken', json.access_token);"
+                  "pm.test('Admin login payload valid', function () {",
+                  "  pm.expect(json).to.have.property('access_token').that.is.a('string').and.not.empty;",
+                  "  pm.expect(json).to.have.property('token_type', 'bearer');",
+                  "  pm.expect(json).to.have.nested.property('user.role', 'admin');",
+                  "});",
+                  "pm.environment.set('adminToken', json.access_token);",
+                  "pm.environment.set('adminUserId', String(json.user.id));"
                 ],
                 "type": "text/javascript"
               }
@@ -490,6 +496,62 @@
           }
         },
         {
+          "name": "Admin Guard Without Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Admin endpoint rejects missing token', function () {",
+                  "  pm.expect([401, 403]).to.include(pm.response.code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/models"
+          }
+        },
+        {
+          "name": "List Admin Models",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Models returned', function () {",
+                  "  pm.expect(json).to.be.an('array').and.not.empty;",
+                  "});",
+                  "pm.test('Model schema valid', function () {",
+                  "  pm.expect(json[0]).to.have.property('code');",
+                  "  pm.expect(json[0]).to.have.property('prediction_kind');",
+                  "});",
+                  "const defaultPriceModel = json.find((model) => model.prediction_kind === 'price' && model.is_default) || json.find((model) => model.prediction_kind === 'price') || json[0];",
+                  "const defaultTrendModel = json.find((model) => model.prediction_kind === 'trend' && model.is_default) || json.find((model) => model.prediction_kind === 'trend') || json[0];",
+                  "pm.environment.set('modelCode', defaultPriceModel.code);",
+                  "pm.environment.set('trendModelCode', defaultTrendModel.code);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/models"
+          }
+        },
+        {
           "name": "Export All Prediction History CSV",
           "event": [
             {
@@ -497,7 +559,12 @@
               "script": {
                 "exec": [
                   "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('CSV response', function () { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/csv'); });"
+                  "pm.test('CSV response', function () { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/csv'); });",
+                  "const body = pm.response.text();",
+                  "pm.test('CSV header exists', function () {",
+                  "  pm.expect(body).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.split('\\n')[0]).to.include(',');",
+                  "});"
                 ],
                 "type": "text/javascript"
               }
@@ -523,7 +590,19 @@
                 "exec": [
                   "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
                   "const json = pm.response.json();",
-                  "pm.test('Datasets returned', function () { pm.expect(json).to.be.an('array'); pm.expect(json.length).to.be.greaterThan(0); });"
+                  "pm.test('Datasets returned', function () {",
+                  "  pm.expect(json).to.be.an('array');",
+                  "  pm.expect(json.length).to.be.greaterThan(0);",
+                  "});",
+                  "pm.test('Dataset schema valid', function () {",
+                  "  pm.expect(json[0]).to.have.property('code');",
+                  "  pm.expect(json[0]).to.have.property('name');",
+                  "  pm.expect(json[0]).to.have.property('is_active');",
+                  "});",
+                  "const selected = json.find((dataset) => dataset.is_active) || json[0];",
+                  "pm.environment.set('datasetCode', selected.code);",
+                  "pm.environment.set('datasetOriginalDescription', selected.description || '');",
+                  "pm.environment.set('datasetUpdateDescription', `Updated by Newman ${Date.now()}`);"
                 ],
                 "type": "text/javascript"
               }
@@ -549,7 +628,10 @@
                 "exec": [
                   "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
                   "const json = pm.response.json();",
-                  "pm.test('Dataset code exists', function () { pm.expect(json).to.have.property('code'); });"
+                  "pm.test('Dataset code matches selected dataset', function () {",
+                  "  pm.expect(json).to.have.property('code', pm.environment.get('datasetCode'));",
+                  "});",
+                  "pm.environment.set('datasetOriginalDescription', json.description || '');"
                 ],
                 "type": "text/javascript"
               }
@@ -575,7 +657,10 @@
                 "exec": [
                   "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
                   "const json = pm.response.json();",
-                  "pm.test('Dataset updated', function () { pm.expect(json).to.have.property('description'); });"
+                  "pm.test('Dataset updated', function () {",
+                  "  pm.expect(json).to.have.property('code', pm.environment.get('datasetCode'));",
+                  "  pm.expect(json).to.have.property('description', pm.environment.get('datasetUpdateDescription'));",
+                  "});"
                 ],
                 "type": "text/javascript"
               }
@@ -595,7 +680,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"description\": \"Updated from Postman collection\"\n}"
+              "raw": "{\n  \"description\": \"{{datasetUpdateDescription}}\"\n}"
             },
             "url": "{{baseUrl}}/admin/datasets/{{datasetCode}}"
           }
@@ -608,7 +693,13 @@
               "script": {
                 "exec": [
                   "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
-                  "pm.test('CSV response', function () { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/csv'); });"
+                  "pm.test('CSV response', function () { pm.expect(pm.response.headers.get('Content-Type')).to.include('text/csv'); });",
+                  "const disposition = pm.response.headers.get('Content-Disposition') || '';",
+                  "pm.test('Filename contains dataset code when header exists', function () {",
+                  "  if (disposition) {",
+                  "    pm.expect(disposition).to.include(pm.environment.get('datasetCode'));",
+                  "  }",
+                  "});"
                 ],
                 "type": "text/javascript"
               }
@@ -623,6 +714,39 @@
               }
             ],
             "url": "{{baseUrl}}/admin/datasets/{{datasetCode}}/export"
+          }
+        },
+        {
+          "name": "List Admin Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "pm.test('Users returned', function () {",
+                  "  pm.expect(json).to.be.an('array').and.not.empty;",
+                  "});",
+                  "const adminUser = json.find((user) => user.role === 'admin');",
+                  "pm.test('Contains at least one admin user', function () {",
+                  "  pm.expect(adminUser).to.exist;",
+                  "});",
+                  "if (adminUser) { pm.environment.set('adminUserId', String(adminUser.id)); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/admin/users"
           }
         },
         {
@@ -658,10 +782,14 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Status 202', function () { pm.response.to.have.status(202); });",
                   "const json = pm.response.json();",
                   "pm.environment.set('crawlerRunId', json.id);",
-                  "pm.test('Run created', function () { pm.expect(json).to.have.property('status'); });"
+                  "pm.environment.set('crawlerPollAttempts', '0');",
+                  "pm.test('Run created', function () {",
+                  "  pm.expect(json).to.have.property('id');",
+                  "  pm.expect(['pending', 'running', 'success', 'failed']).to.include(json.status);",
+                  "});"
                 ],
                 "type": "text/javascript"
               }
@@ -681,7 +809,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"task\": \"report\",\n  \"start\": \"2026-01-01\",\n  \"end\": \"2026-01-07\",\n  \"quiet\": true\n}"
+              "raw": "{\n  \"task\": \"report\",\n  \"quiet\": true\n}"
             },
             "url": "{{baseUrl}}/admin/crawler/runs"
           }
@@ -695,7 +823,23 @@
                 "exec": [
                   "pm.test('Status 200', function () { pm.response.to.have.status(200); });",
                   "const json = pm.response.json();",
-                  "pm.test('Run detail exists', function () { pm.expect(json).to.have.property('id'); });"
+                  "const expectedId = Number(pm.environment.get('crawlerRunId'));",
+                  "let attempts = Number(pm.environment.get('crawlerPollAttempts') || '0');",
+                  "const maxAttempts = 15;",
+                  "pm.test('Run detail exists', function () { pm.expect(json).to.have.property('id'); });",
+                  "pm.test('Run id matches', function () { pm.expect(json.id).to.eql(expectedId); });",
+                  "pm.test('Crawler status is valid', function () {",
+                  "  pm.expect(['pending', 'running', 'success', 'failed']).to.include(json.status);",
+                  "});",
+                  "if (!['success', 'failed'].includes(json.status) && attempts < maxAttempts) {",
+                  "  attempts += 1;",
+                  "  pm.environment.set('crawlerPollAttempts', String(attempts));",
+                  "  pm.execution.setNextRequest('Get Crawler Run Detail');",
+                  "} else {",
+                  "  pm.environment.unset('crawlerPollAttempts');",
+                  "  pm.test('Crawler run reaches success', function () { pm.expect(json.status).to.eql('success'); });",
+                  "  pm.test('Crawler exit code is zero', function () { pm.expect(json.exit_code).to.eql(0); });",
+                  "}"
                 ],
                 "type": "text/javascript"
               }

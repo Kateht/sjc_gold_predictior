@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
 import { askAssistant, fetchModels, fetchPricePrediction, fetchTrendPrediction } from '@/lib/api';
-import { formatDomesticPrice, formatNumber } from '@/lib/format';
+import { formatMarketPrice, formatNumber } from '@/lib/format';
 import { getUserFacingModelLabel } from '@/lib/modelLabels';
 import { Sparkline } from '@/components/Sparkline';
 import type { ModelRead, PricePredictionResponse, TrendPredictionResponse } from '@/types';
@@ -178,7 +178,8 @@ export function PredictPage() {
   const activePreviewIndex = mode === 'price' ? priceHoverIndex : trendHoverIndex;
   const activePointIndex = activePreviewIndex ?? activeSelectedIndex;
   const activeSelectedValue = activeChartValues[activePointIndex] ?? activeChartValues[activeChartValues.length - 1] ?? 0;
-  const activeSelectedLabel = mode === 'price' ? formatDomesticPrice(activeSelectedValue) : formatNumber(activeSelectedValue);
+  const activePriceSource = priceResult?.source ?? source;
+  const activeSelectedLabel = mode === 'price' ? formatMarketPrice(activeSelectedValue, activePriceSource) : formatNumber(activeSelectedValue);
   const activeSelectedDate = activeLabels[activePointIndex] ?? activeLabels[activeLabels.length - 1] ?? 'N/A';
   const activeSelectedTrend = mode === 'price' ? priceResult?.trend ?? 'trend' : trendResult?.trend_predictions[activePointIndex] ?? 'flat';
   const activeResultModel = mode === 'price' ? priceResult?.selected_model : trendResult?.selected_model;
@@ -311,7 +312,7 @@ export function PredictPage() {
                 <Sparkline
                   values={activeChartValues}
                   labels={activeLabels}
-                  height={120}
+                  height={104}
                   accent={chartAccent}
                   highlightIndex={activePointIndex}
                   onPointSelect={selectPoint}
@@ -339,7 +340,7 @@ export function PredictPage() {
               <div className="forecast-strip">
                 {activeLabels.map((label, index) => {
                   const tone = mode === 'price' ? 'badge--neutral' : activeChartValues[index] >= 0.5 ? 'badge--positive' : 'badge--neutral';
-                  const pointValue = mode === 'price' ? formatDomesticPrice(activeChartValues[index]) : formatNumber(activeChartValues[index]);
+                  const pointValue = mode === 'price' ? formatMarketPrice(activeChartValues[index], activePriceSource) : formatNumber(activeChartValues[index]);
 
                   return (
                     <button
@@ -441,7 +442,7 @@ export function PredictPage() {
                 >
                   <div className="timeline-item__head">
                     <strong>{date}</strong>
-                    <span className="badge">{formatDomesticPrice(priceResult.predictions[index])}</span>
+                    <span className="badge">{formatMarketPrice(priceResult.predictions[index], priceResult.source)}</span>
                   </div>
                   <p>{index === 0 ? `First forecast point from ${getUserFacingModelLabel(priceResult.selected_model)}.` : `Forecast point ${index + 1} of ${priceResult.future_dates.length}.`}</p>
                 </button>

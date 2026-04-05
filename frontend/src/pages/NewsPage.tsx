@@ -67,8 +67,9 @@ export function NewsPage() {
       <section className="panel stack">
         <div className="section-title">
           <div>
-            <p className="eyebrow">News feed</p>
-            <h3>Market context and gold headlines.</h3>
+            <p className="eyebrow">Live news feed</p>
+            <h3>Market context and gold headlines from live sources.</h3>
+            <p className="section-title__meta">Each card opens the original article so the page acts like a real news reader, not a static bulletin board.</p>
           </div>
           <label className="controls-row" style={{ alignItems: 'center' }}>
             <input type="checkbox" checked={featuredOnly} onChange={(event) => setFeaturedOnly(event.target.checked)} />
@@ -92,22 +93,47 @@ export function NewsPage() {
       </section>
 
       <section className="article-grid">
-        {articles.map((article) => (
-          <article key={article.id} className="article-card">
-            <div className="article-card__meta">
-              <span className="badge">{article.is_featured ? 'featured' : 'news'}</span>
-              {article.source_name ? <span>{article.source_name}</span> : null}
-              {article.published_at ? <span>{formatDateTime(article.published_at)}</span> : null}
-            </div>
-            <h3 className="article-card__title">{article.title}</h3>
-            <p className="article-card__body">{article.summary ?? article.content ?? 'No summary available.'}</p>
-            {article.source_url ? (
-              <a className="button button--ghost" href={article.source_url} target="_blank" rel="noreferrer">
-                Open source
+        {articles.map((article) => {
+          if (article.source_url) {
+            return (
+              <a key={article.id} className="article-card article-card--link" href={article.source_url} target="_blank" rel="noreferrer">
+              {article.image_url ? (
+                <div className="article-card__media">
+                  <img src={article.image_url} alt={article.title} loading="lazy" />
+                </div>
+              ) : null}
+              <div className="article-card__meta">
+                <span className="badge">{article.is_featured ? 'featured' : 'news'}</span>
+                {article.source_name ? <span>{article.source_name}</span> : null}
+                {article.published_at ? <span>{formatDateTime(article.published_at)}</span> : null}
+              </div>
+              <h3 className="article-card__title">{article.title}</h3>
+              <p className="article-card__body">{article.summary ?? article.content ?? 'No summary available.'}</p>
+              <div className="controls-row controls-row--space-between article-card__footer">
+                <span className="article-card__hint">{article.source_url ? 'Open original article' : 'No source link available'}</span>
+                <span className="button button--ghost">Read article</span>
+              </div>
               </a>
-            ) : null}
-          </article>
-        ))}
+            );
+          }
+
+          return (
+            <article key={article.id} className="article-card">
+              {article.image_url ? (
+                <div className="article-card__media">
+                  <img src={article.image_url} alt={article.title} loading="lazy" />
+                </div>
+              ) : null}
+              <div className="article-card__meta">
+                <span className="badge">{article.is_featured ? 'featured' : 'news'}</span>
+                {article.source_name ? <span>{article.source_name}</span> : null}
+                {article.published_at ? <span>{formatDateTime(article.published_at)}</span> : null}
+              </div>
+              <h3 className="article-card__title">{article.title}</h3>
+              <p className="article-card__body">{article.summary ?? article.content ?? 'No summary available.'}</p>
+            </article>
+          );
+        })}
         {!articles.length && !loading ? <div className="empty-state">No articles found for the selected filters.</div> : null}
       </section>
     </div>

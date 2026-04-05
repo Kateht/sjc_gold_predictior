@@ -290,6 +290,10 @@ export async function fetchCrawlerRuns(limit = 20): Promise<CrawlerRunRead[]> {
   });
 }
 
+export async function fetchCrawlerRun(runId: number): Promise<CrawlerRunRead> {
+  return request<CrawlerRunRead>(`/admin/crawler/runs/${runId}`);
+}
+
 export async function triggerCrawlerRun(payload: Record<string, unknown>): Promise<CrawlerRunRead> {
   return request<CrawlerRunRead>('/admin/crawler/runs', {
     method: 'POST',

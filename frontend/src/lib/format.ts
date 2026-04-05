@@ -17,6 +17,10 @@ const dateFormatter = new Intl.DateTimeFormat('vi-VN', {
   timeStyle: 'short',
 });
 
+const shortDateFormatter = new Intl.DateTimeFormat('vi-VN', {
+  dateStyle: 'medium',
+});
+
 export function formatVnd(value?: number | null): string {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     return 'N/A';
@@ -40,6 +44,14 @@ export function formatUsd(value?: number | null): string {
     currency: 'USD',
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+export function formatMarketPrice(value?: number | null, source?: string | null): string {
+  const normalizedSource = (source ?? '').trim().toLowerCase();
+  if (normalizedSource === 'world' || normalizedSource === 'gc=f' || normalizedSource === 'gc') {
+    return formatUsd(value);
+  }
+  return formatDomesticPrice(value);
 }
 
 export function formatNumber(value?: number | null): string {
@@ -66,4 +78,15 @@ export function formatDateTime(value?: string | null): string {
     return value;
   }
   return dateFormatter.format(parsed);
+}
+
+export function formatDateOnly(value?: string | null): string {
+  if (!value) {
+    return 'N/A';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return shortDateFormatter.format(parsed);
 }

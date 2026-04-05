@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { fetchModels, fetchNewsArticles, fetchOverview, fetchPriceChart } from '@/lib/api';
-import { formatDateTime, formatDomesticPrice, formatPercent, formatUsd } from '@/lib/format';
+import { fetchGoldSources, fetchModels, fetchNewsArticles, fetchOverview, fetchPriceChart } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+import { formatDateOnly, formatDateTime, formatDomesticPrice, formatMarketPrice, formatPercent, formatUsd } from '@/lib/format';
 import { getUserFacingModelLabel } from '@/lib/modelLabels';
-import type { ModelRead, NewsArticleRead, OverviewResponse, PriceChartResponse } from '@/types';
+import type { GoldSourceRead, ModelRead, NewsArticleRead, OverviewResponse, PriceChartResponse } from '@/types';
 import { Sparkline } from '@/components/Sparkline';
 
 type DashboardChartRange = '30d' | '90d' | '180d' | '1y';
@@ -16,28 +17,19 @@ const CHART_RANGE_OPTIONS: Array<{ value: DashboardChartRange; label: string }> 
   { value: '1y', label: '1Y' },
 ];
 
-const MONTH_STEP_SIZE = 30;
-const MAX_ZOOM_STEP = 4;
-
-function formatMonthLabel(dateValue?: string): string {
-  if (!dateValue) {
-    return 'N/A';
-  }
-  const parsed = new Date(dateValue);
-  if (Number.isNaN(parsed.getTime())) {
-    return dateValue;
-  }
-  return new Intl.DateTimeFormat('vi-VN', { month: 'long', year: 'numeric' }).format(parsed);
-}
-
 export function DashboardPage() {
+  const { isAuthenticated } = useAuth();
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [chart, setChart] = useState<PriceChartResponse | null>(null);
+  const [goldSources, setGoldSources] = useState<GoldSourceRead[]>([]);
   const [chartRange, setChartRange] = useState<DashboardChartRange>('1y');
+  const [chartSource, setChartSource] = useState<'sjc' | 'world'>('sjc');
+  const [chartView, setChartView] = useState<'chart' | 'numbers'>('chart');
+  const [chartRangeMode, setChartRangeMode] = useState<'preset' | 'custom'>('preset');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [chartLoading, setChartLoading] = useState(true);
   const [chartError, setChartError] = useState('');
-  const [monthShift, setMonthShift] = useState(0);
-  const [zoomStep, setZoomStep] = useState(0);
   const [models, setModels] = useState<ModelRead[]>([]);
   const [news, setNews] = useState<NewsArticleRead[]>([]);
   const [error, setError] = useState('');
@@ -53,10 +45,11 @@ export function DashboardPage() {
       setLoading(true);
       setError('');
 
-      const [overviewResult, modelsResult, newsResult] = await Promise.allSettled([
+      const [overviewResult, modelsResult, newsResult, sourcesResult] = await Promise.allSettled([
         fetchOverview(),
         fetchModels(undefined, true),
-        fetchNewsArticles(undefined, true, 4),
+        fetchNewsArticles(undefined, true, 6),
+        fetchGoldSources(),
       ]);
 
       if (!active) {
@@ -66,6 +59,7 @@ export function DashboardPage() {
       setOverview(overviewResult.status === 'fulfilled' ? overviewResult.value : null);
       setModels(modelsResult.status === 'fulfilled' ? modelsResult.value : []);
       setNews(newsResult.status === 'fulfilled' ? newsResult.value : []);
+      setGoldSources(sourcesResult.status === 'fulfilled' ? sourcesResult.value : []);
       setNewsError(newsResult.status === 'rejected' ? (newsResult.reason instanceof Error ? newsResult.reason.message : 'Failed to load news') : '');
 
       const firstCriticalError = [overviewResult, modelsResult].find((result) => result.status === 'rejected');
@@ -86,7 +80,8 @@ export function DashboardPage() {
       setChartLoading(true);
       setChartError('');
       try {
-        const response = await fetchPriceChart(chartRange, 'sjc');
+        const rangeValue = chartRangeMode === 'custom' && isAuthenticated ? 'all' : chartRange;
+        const response = await fetchPriceChart(rangeValue, chartSource);
         if (!active) {
           return;
         }
@@ -108,68 +103,67 @@ export function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [chartRange]);
-
-  const maxMonthShift = useMemo(() => {
-    if (chartRange !== '1y' || !chart?.prices.length) {
-      return 0;
-    }
-    return Math.max(0, Math.floor((chart.prices.length - 1) / MONTH_STEP_SIZE));
-  }, [chart, chartRange]);
-
-  const normalizedMonthShift = Math.min(monthShift, maxMonthShift);
+  }, [chartRange, chartRangeMode, chartSource, isAuthenticated]);
 
   useEffect(() => {
-    if (monthShift !== normalizedMonthShift) {
-      setMonthShift(normalizedMonthShift);
+    if (!isAuthenticated && chartRangeMode === 'custom') {
+      setChartRangeMode('preset');
     }
-  }, [monthShift, normalizedMonthShift]);
-
-  useEffect(() => {
-    if (chartRange !== '1y' && monthShift !== 0) {
-      setMonthShift(0);
-    }
-  }, [chartRange, monthShift]);
+  }, [chartRangeMode, isAuthenticated]);
 
   const visibleChart = useMemo(() => {
     if (!chart || !chart.prices.length) {
       return { dates: [] as string[], prices: [] as number[] };
     }
 
-    const totalPoints = chart.prices.length;
-    const endOffset = chartRange === '1y' ? normalizedMonthShift * MONTH_STEP_SIZE : 0;
-    const endIndex = Math.max(0, totalPoints - 1 - endOffset);
-    const baseWindow = chartRange === '1y' ? MONTH_STEP_SIZE : totalPoints;
-    const targetWindow = Math.max(7, Math.min(totalPoints, Math.round(baseWindow / (zoomStep + 1))));
-    const startIndex = Math.max(0, endIndex - targetWindow + 1);
+    if (chartRangeMode === 'custom' && isAuthenticated) {
+      const sortedDates = [customFrom, customTo].filter(Boolean).sort();
+      const startDate = sortedDates[0] ?? '';
+      const endDate = sortedDates[1] ?? '';
+      const filtered = chart.dates
+        .map((date, index) => ({ date, price: chart.prices[index] }))
+        .filter((item) => {
+          const afterStart = !startDate || item.date >= startDate;
+          const beforeEnd = !endDate || item.date <= endDate;
+          return afterStart && beforeEnd;
+        });
+
+      return {
+        dates: filtered.map((item) => item.date),
+        prices: filtered.map((item) => item.price),
+      };
+    }
 
     return {
-      dates: chart.dates.slice(startIndex, endIndex + 1),
-      prices: chart.prices.slice(startIndex, endIndex + 1),
+      dates: chart.dates,
+      prices: chart.prices,
     };
-  }, [chart, chartRange, normalizedMonthShift, zoomStep]);
+  }, [chart, chartRangeMode, customFrom, customTo, isAuthenticated]);
 
   useEffect(() => {
     if (visibleChart.prices.length) {
       setChartSelectedIndex(visibleChart.prices.length - 1);
       setChartHoverIndex(null);
     }
-  }, [visibleChart.prices.length, chartRange, normalizedMonthShift, zoomStep]);
+  }, [visibleChart.prices.length, chartRange, chartRangeMode, customFrom, customTo, chartSource]);
 
   const domesticPrice = overview?.domestic_gold.current_price_vnd;
   const worldPrice = overview?.world_gold.current_price_usd;
   const gap = overview?.arbitrage.gap_vnd;
   const gapLabel = gap === undefined || gap === null ? 'N/A' : `${gap >= 0 ? '+' : ''}${gap.toLocaleString('vi-VN')} VND`;
-  const latestChartPrice = visibleChart.prices.length ? visibleChart.prices[visibleChart.prices.length - 1] : null;
-  const latestChartDate = visibleChart.dates.length ? visibleChart.dates[visibleChart.dates.length - 1] : 'Recent';
+  const chartPointCount = visibleChart.prices.length;
+  const latestChartPrice = chartPointCount ? visibleChart.prices[chartPointCount - 1] : null;
+  const latestChartDate = chartPointCount ? visibleChart.dates[chartPointCount - 1] : 'Recent';
   const chartActiveIndex = chartHoverIndex ?? chartSelectedIndex;
   const chartActivePrice = visibleChart.prices[chartActiveIndex] ?? latestChartPrice;
   const chartActiveDate = visibleChart.dates[chartActiveIndex] ?? latestChartDate;
   const chartActiveLabel = chartHoverIndex !== null ? 'Hovered point' : 'Selected point';
-  const canShiftBack = chartRange === '1y' && normalizedMonthShift < maxMonthShift;
-  const canShiftForward = chartRange === '1y' && normalizedMonthShift > 0;
-  const canZoomIn = zoomStep < MAX_ZOOM_STEP && visibleChart.prices.length > 7;
-  const canZoomOut = zoomStep > 0;
+  const chartActivePriceLabel = formatMarketPrice(chartActivePrice, chartSource);
+  const chartSourceLabel = chartSource === 'world' ? 'World gold' : 'SJC';
+  const chartRangeLabel = chartRangeMode === 'custom' && isAuthenticated ? 'Custom range' : chartRange.toUpperCase();
+  const chartRangeSubtitle = chartRangeMode === 'custom' && isAuthenticated
+    ? `${formatDateOnly(customFrom)} → ${formatDateOnly(customTo)}`
+    : 'Preset range';
 
   return (
     <div className="page stack">
@@ -198,62 +192,103 @@ export function DashboardPage() {
         <div className="chart-workbench__head">
           <div>
             <p className="eyebrow">Interactive chart</p>
-            <h3>Domestic SJC chart with timeline controls.</h3>
+            <h3>{chartSourceLabel} chart with timeline controls.</h3>
             <p className="section-title__meta">
-              {chartActivePrice ? formatDomesticPrice(chartActivePrice) : 'No chart data'} at {chartActiveDate}
+              {chartActivePriceLabel} at {chartActiveDate}
             </p>
           </div>
-          <span className="badge badge--neutral">{chartActiveLabel}</span>
+          <div className="controls-row">
+            <span className="badge badge--neutral">{chartActiveLabel}</span>
+            <span className="badge badge--neutral">{chartRangeLabel}</span>
+          </div>
         </div>
 
         <div className="chart-workbench__controls">
           <div className="chart-tool-group">
-            <span className="chart-tool-label">Range</span>
+            <span className="chart-tool-label">View mode</span>
             <div className="tabs tabs--compact">
-              {CHART_RANGE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`tab ${chartRange === option.value ? 'is-active' : ''}`}
-                  onClick={() => {
-                    setChartRange(option.value);
-                    setZoomStep(0);
-                    setMonthShift(0);
-                  }}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="chart-tool-group">
-            <span className="chart-tool-label">Month view (1Y)</span>
-            <div className="chart-stepper">
-              <button type="button" className="button button--ghost" disabled={!canShiftBack} onClick={() => setMonthShift((current) => Math.min(maxMonthShift, current + 1))}>
-                Previous month
+              <button type="button" className={`tab ${chartView === 'chart' ? 'is-active' : ''}`} onClick={() => setChartView('chart')}>
+                Graph
               </button>
-              <span className="chart-stepper__status">{chartRange === '1y' ? formatMonthLabel(latestChartDate) : 'Switch to 1Y to browse by month'}</span>
-              <button type="button" className="button button--ghost" disabled={!canShiftForward} onClick={() => setMonthShift((current) => Math.max(0, current - 1))}>
-                Next month
+              <button type="button" className={`tab ${chartView === 'numbers' ? 'is-active' : ''}`} onClick={() => setChartView('numbers')}>
+                Numbers
               </button>
             </div>
           </div>
 
-          <div className="chart-tool-group">
-            <span className="chart-tool-label">Zoom</span>
-            <div className="chart-stepper">
-              <button type="button" className="button button--ghost" disabled={!canZoomOut} onClick={() => setZoomStep((current) => Math.max(0, current - 1))}>
-                Zoom out
-              </button>
-              <span className="chart-stepper__status">Level {zoomStep + 1}</span>
-              <button type="button" className="button button--ghost" disabled={!canZoomIn} onClick={() => setZoomStep((current) => Math.min(MAX_ZOOM_STEP, current + 1))}>
-                Zoom in
-              </button>
-              <button type="button" className="button button--ghost" onClick={() => { setZoomStep(0); setMonthShift(0); }}>
-                Reset view
-              </button>
+          <div className="grid-2">
+            <label className="field">
+              <span>Source</span>
+              <select className="select" value={chartSource} onChange={(event) => setChartSource(event.target.value as 'sjc' | 'world')}>
+                <option value="sjc">SJC</option>
+                <option value="world">World gold</option>
+              </select>
+            </label>
+
+            <div className="chart-tool-group">
+              <span className="chart-tool-label">Range</span>
+              {isAuthenticated ? (
+                <div className="tabs tabs--compact">
+                  <button type="button" className={`tab ${chartRangeMode === 'preset' ? 'is-active' : ''}`} onClick={() => setChartRangeMode('preset')}>
+                    Preset
+                  </button>
+                  <button
+                    type="button"
+                    className={`tab ${chartRangeMode === 'custom' ? 'is-active' : ''}`}
+                    onClick={() => {
+                      setChartRangeMode('custom');
+                      if (chart?.dates.length) {
+                        setCustomFrom((current) => current || chart.dates[0]);
+                        setCustomTo((current) => current || chart.dates[chart.dates.length - 1]);
+                      }
+                    }}
+                  >
+                    Custom
+                  </button>
+                </div>
+              ) : null}
+
+              {chartRangeMode === 'preset' || !isAuthenticated ? (
+                <div className="tabs tabs--compact chart-range-tabs">
+                  {CHART_RANGE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`tab ${chartRange === option.value ? 'is-active' : ''}`}
+                      onClick={() => setChartRange(option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid-2 chart-range-grid">
+                  <label className="field">
+                    <span>From</span>
+                    <input className="input" type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span>To</span>
+                    <input className="input" type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} />
+                  </label>
+                </div>
+              )}
             </div>
+          </div>
+
+          <p className="hero__chart-hint">
+            {isAuthenticated
+              ? 'Signed-in users can slice the full historical feed by date. Guests are limited to the latest one year of history.'
+              : 'Guest access is limited to the latest one year of history.'}
+            {chartRangeMode === 'custom' && isAuthenticated ? ` Active window: ${chartRangeSubtitle}.` : ''}
+          </p>
+
+          <div className="chip-row source-chip-row">
+            {goldSources.slice(0, 4).map((sourceItem) => (
+              <a key={sourceItem.id} className="chip chip--action" href={sourceItem.source_url} target="_blank" rel="noreferrer">
+                <span>{sourceItem.name}</span>
+              </a>
+            ))}
           </div>
         </div>
 
@@ -261,18 +296,49 @@ export function DashboardPage() {
         {chartError ? <div className="empty-state">Chart unavailable: {chartError}</div> : null}
 
         {!chartLoading && !chartError && visibleChart.prices.length ? (
-          <Sparkline
-            values={visibleChart.prices}
-            labels={visibleChart.dates}
-            height={140}
-            className="sparkline--hero"
-            highlightIndex={chartActiveIndex}
-            onPointSelect={setChartSelectedIndex}
-            onPointHover={setChartHoverIndex}
-          />
+          chartView === 'chart' ? (
+            <div className="prediction-chart">
+              <Sparkline
+                values={visibleChart.prices}
+                labels={visibleChart.dates}
+                height={104}
+                className="sparkline--hero"
+                highlightIndex={chartActiveIndex}
+                onPointSelect={setChartSelectedIndex}
+                onPointHover={setChartHoverIndex}
+              />
+
+              <div className="forecast-summary">
+                <div>
+                  <p className="eyebrow">Selected point</p>
+                  <h4>{chartActiveDate}</h4>
+                  <p>Use the source picker and range controls to inspect the series in detail.</p>
+                </div>
+                <div className="forecast-summary__value">
+                  <strong>{chartActivePriceLabel}</strong>
+                  <span className="badge badge--neutral">{chartSourceLabel}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="chart-number-grid">
+              {visibleChart.dates.map((date, index) => (
+                <div key={`${date}-${index}`} className="chart-number-card">
+                  <span className="chart-number-card__date">{date}</span>
+                  <strong>{formatMarketPrice(visibleChart.prices[index], chartSource)}</strong>
+                </div>
+              ))}
+            </div>
+          )
         ) : null}
 
-        <p className="hero__chart-hint">Use range, month stepping, and zoom controls to inspect the series in detail.</p>
+        {!chartLoading && !chartError && !visibleChart.prices.length ? <div className="empty-state">No data found for the selected range.</div> : null}
+
+        <p className="hero__chart-hint">
+          {chartView === 'chart'
+            ? 'Use the chart dots or switch to numbers mode to inspect the same filtered series in a compact list.'
+            : 'Numbers mode mirrors the same filtered series without the chart.'}
+        </p>
       </section>
 
       {loading ? <div className="panel panel--compact">Loading dashboard data...</div> : null}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -9,84 +10,28 @@ from app.core.security import hash_password
 from app.db.models import DatasetSource, GoldSourceLink, MLModel, NewsArticle, NewsCategory, User
 
 
-def seed_default_admin(db: Session) -> None:
-    if not settings.AUTO_SEED_ADMIN:
-        return
-
-    exists = db.query(User).filter(User.email == settings.DEFAULT_ADMIN_EMAIL).first()
-    if exists:
-        return
-
-    now = datetime.now(timezone.utc)
-    admin = User(
-        name="System Admin",
-        email=settings.DEFAULT_ADMIN_EMAIL,
-        hashed_password=hash_password(settings.DEFAULT_ADMIN_PASSWORD),
-        role="admin",
-        is_active=True,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(admin)
-    db.commit()
-
-
 def seed_default_models(db: Session) -> None:
     default_models = [
         {
-            "code": "linear-price-v1",
-            "name": "Linear Regression Price Baseline",
+            "code": "best-xgb-price-v1",
+            "name": "Best XGBoost Price Model",
             "prediction_kind": "price",
-            "provider": "builtin",
-            "description": "Baseline linear forecast for SJC price",
-            "config_json": {"strategy": "linear"},
-            "metrics_json": {"mae": None, "rmse": None},
-            "is_default": True,
-            "is_active": True,
-        },
-        {
-            "code": "momentum-price-v1",
-            "name": "Momentum Price Baseline",
-            "prediction_kind": "price",
-            "provider": "builtin",
-            "description": "Continues recent momentum using rolling deltas",
-            "config_json": {"strategy": "momentum"},
-            "metrics_json": {"mae": None, "rmse": None},
-            "is_default": False,
-            "is_active": True,
-        },
-        {
-            "code": "mean-reversion-price-v1",
-            "name": "Mean Reversion Price Baseline",
-            "prediction_kind": "price",
-            "provider": "builtin",
-            "description": "Pulls prediction toward rolling average",
-            "config_json": {"strategy": "mean_reversion"},
-            "metrics_json": {"mae": None, "rmse": None},
-            "is_default": False,
-            "is_active": True,
-        },
-        {
-            "code": "trend-slope-v1",
-            "name": "Trend Slope Classifier",
-            "prediction_kind": "trend",
-            "provider": "builtin",
-            "description": "Classifies trend from the predicted price path",
-            "config_json": {"strategy": "slope"},
-            "metrics_json": {"accuracy": None},
-            "is_default": True,
-            "is_active": True,
-        },
-        {
-            "code": "sjc-classification-v1",
-            "name": "SJC Direction Classifier",
-            "prediction_kind": "trend",
             "provider": "artifact",
-            "artifact_path": "app/models/sjc_classification.h5",
-            "description": "Artifact-backed classifier for direction bias on the SJC series",
-            "config_json": {"feature_window": 10},
-            "metrics_json": {"accuracy": None},
-            "is_default": False,
+            "artifact_path": "app/models/best_xgb_model.pkl",
+            "description": "Artifact-backed XGBoost model for price forecasting",
+            "config_json": {
+                "subsample": 0.8,
+                "reg_lambda": 5.0,
+                "reg_alpha": 0.1,
+                "n_estimators": 500,
+                "min_child_weight": 5,
+                "max_depth": 3,
+                "learning_rate": 0.05,
+                "gamma": 0,
+                "colsample_bytree": 0.8,
+            },
+            "metrics_json": {"mae": None, "rmse": None},
+            "is_default": True,
             "is_active": True,
         },
         {
@@ -102,80 +47,39 @@ def seed_default_models(db: Session) -> None:
             "is_active": True,
         },
         {
-            "code": "best-gru-price-v1",
-            "name": "Best GRU Price Model",
-            "prediction_kind": "price",
+            "code": "sjc-classification-v1",
+            "name": "SJC Direction Classifier",
+            "prediction_kind": "trend",
             "provider": "artifact",
-            "artifact_path": "app/models/best_gru_model.h5",
-            "description": "Primary GRU artifact for price forecasting",
-            "config_json": {"architecture": "gru"},
-            "metrics_json": {"mae": None, "rmse": None},
-            "is_default": False,
-            "is_active": True,
-        },
-        {
-            "code": "best-gru-base-price-v1",
-            "name": "Best GRU Base Price Model",
-            "prediction_kind": "price",
-            "provider": "artifact",
-            "artifact_path": "app/models/best_gru_model_base.h5",
-            "description": "Baseline GRU artifact for comparative forecasting",
-            "config_json": {"architecture": "gru_base"},
-            "metrics_json": {"mae": None, "rmse": None},
-            "is_default": False,
-            "is_active": True,
-        },
-        {
-            "code": "best-knn-price-v1",
-            "name": "Best KNN Price Model",
-            "prediction_kind": "price",
-            "provider": "artifact",
-            "artifact_path": "app/models/best_knn_model.pkl",
-            "description": "KNN artifact for short horizon price patterns",
-            "config_json": {"neighbors": 5},
-            "metrics_json": {"mae": None, "rmse": None},
-            "is_default": False,
-            "is_active": True,
-        },
-        {
-            "code": "bagged-knn-price-v1",
-            "name": "Bagged KNN Price Model",
-            "prediction_kind": "price",
-            "provider": "artifact",
-            "artifact_path": "app/models/bagged_knn_model.pkl",
-            "description": "Bagged KNN ensemble for smoother price estimates",
-            "config_json": {"ensemble": "bagging"},
-            "metrics_json": {"mae": None, "rmse": None},
-            "is_default": False,
-            "is_active": True,
-        },
-        {
-            "code": "meta-price-v1",
-            "name": "Meta Price Ensemble",
-            "prediction_kind": "price",
-            "provider": "artifact",
-            "artifact_path": "app/models/meta.pkl",
-            "description": "Stacked meta model that blends price forecasts",
-            "config_json": {"ensemble": "stacked"},
-            "metrics_json": {"mae": None, "rmse": None},
-            "is_default": False,
-            "is_active": True,
-        },
-        {
-            "code": "meta-lstm-k10-price-v1",
-            "name": "Meta LSTM K10 Ensemble",
-            "prediction_kind": "price",
-            "provider": "artifact",
-            "artifact_path": "app/models/meta_lstm_k10.pkl",
-            "description": "Meta learner for the LSTM K10 pipeline",
-            "config_json": {"ensemble": "meta_lstm"},
-            "metrics_json": {"mae": None, "rmse": None},
-            "is_default": False,
+            "artifact_path": "app/models/sjc_classification.h5",
+            "description": "Artifact-backed classifier for direction bias on the SJC series",
+            "config_json": {"feature_window": 10},
+            "metrics_json": {"accuracy": None},
+            "is_default": True,
             "is_active": True,
         },
     ]
 
-    existing_models = {model.code: model for model in db.query(MLModel).all()}
+    canonical_codes = {payload["code"] for payload in default_models}
+
+    def _artifact_exists(artifact_path: str | None) -> bool:
+        if not artifact_path:
+            return False
+        path = Path(artifact_path)
+        if not path.is_absolute():
+            path = Path(settings.PROJECT_ROOT) / path
+        return path.exists()
+
+    for model in db.query(MLModel).all():
+        if model.code not in canonical_codes:
+            db.delete(model)
+            continue
+        if model.provider == "artifact" and not _artifact_exists(model.artifact_path):
+            db.delete(model)
+
+    db.flush()
+
+    existing_models = {model.code: model for model in db.query(MLModel).filter(MLModel.code.in_(canonical_codes)).all()}
     for payload in default_models:
         model = existing_models.get(payload["code"])
         if model:
