@@ -6,6 +6,40 @@ import numpy as np
 import pandas as pd
 import joblib
 import json
+
+
+XGB_FEATURE_COLUMNS = [
+    'Interest', 'CPI', 'Real_Yield_10Y', 'Gold_Close', 'Gold_High', 'Gold_Low', 'Gold_Volume',
+    'USD_index_Close', 'Oil_Close', 'USD_VND_Close', 'GVZ_Close', 'VIX_Close', 'ETF_Holdings_Close',
+    'MOVE_Index_Close', 'Gold_world_vnd', 'SJC_Premium', 'SJC_Premium_Percent', 'Shock_Index',
+    'SJC_lag1', 'SJC_lag7', 'SJC_ma7', 'Gold_return', 'Gold_volume_rank', 'Gold_range',
+    'Gold_volatility_7', 'Gold_momentum', 'Gold_Volume_Anomaly', 'PVT', 'year', 'month', 'day',
+    'dayofweek', 'weekofyear', 'quarter'
+]
+
+
+def _prepare_xgb_feature_frame(df_raw: pd.DataFrame) -> pd.DataFrame:
+    df_temp = df_raw.copy()
+
+    df_temp.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df_temp.ffill(inplace=True)
+    df_temp.bfill(inplace=True)
+    df_temp.fillna(0, inplace=True)
+
+    df_temp['year'] = df_temp.index.year
+    df_temp['month'] = df_temp.index.month
+    df_temp['day'] = df_temp.index.day
+    df_temp['dayofweek'] = df_temp.index.dayofweek
+    df_temp['weekofyear'] = df_temp.index.isocalendar().week.astype(int)
+    df_temp['quarter'] = df_temp.index.quarter
+
+    for column in XGB_FEATURE_COLUMNS:
+        if column not in df_temp.columns:
+            df_temp[column] = 0.0
+
+    return df_temp
+
+
 # --- Patch để xử lý version mismatch khi load model .h5 ---
 _original_dense_init = keras.layers.Dense.__init__
 
@@ -65,7 +99,7 @@ class GoldPredictionEngine:
             
             # Đọc features và k riêng của XGBoost từ file JSON
             # (Nếu JSON không có thì fallback về dùng chung với LSTM)
-            self.xgb_features = self.xgb_meta.get("feature_columns", self.feature_cols)
+            self.xgb_features = self.xgb_meta.get("feature_columns") or list(XGB_FEATURE_COLUMNS)
             self.xgb_k = self.xgb_meta.get("best_k", self.best_k)
             print("Loaded XGBoost model successfully.")
         except Exception as e:
@@ -106,8 +140,15 @@ class GoldPredictionEngine:
                 
             current_window_diff = np.vstack([current_window_diff[1:], new_delta_row])
 
-        trend = "tăng 📈" if predictions[-1] > predictions[0] else "giảm 📉"
-        return {"predictions": predictions, "trend": trend}
+        trend_predictions, trend_scores, trend = summarize_price_path(float(last_actual_sjc_price), predictions)
+        trend_label = "tăng 📈" if trend == "up" else "giảm 📉" if trend == "down" else "đi ngang"
+        return {
+            "predictions": predictions,
+            "base_price": float(last_actual_sjc_price),
+            "trend": trend_label,
+            "trend_predictions": trend_predictions,
+            "trend_scores": trend_scores,
+        }
     
 
     def predict_trend_classification(self, df_diff):
@@ -166,27 +207,10 @@ class GoldPredictionEngine:
         import pandas as pd
         import numpy as np
         from sklearn.preprocessing import MinMaxScaler
-        
-        xgb_features = ['Interest', 'CPI', 'Real_Yield_10Y', 'Gold_Close', 'Gold_High', 'Gold_Low', 'Gold_Volume', 'USD_index_Close', 'Oil_Close', 'USD_VND_Close', 'GVZ_Close', 'VIX_Close', 'ETF_Holdings_Close', 'MOVE_Index_Close', 'Gold_world_vnd', 'SJC_Premium', 'SJC_Premium_Percent', 'Shock_Index', 'SJC_lag1', 'SJC_lag7', 'SJC_ma7', 'Gold_return', 'Gold_volume_rank', 'Gold_range', 'Gold_volatility_7', 'Gold_momentum', 'Gold_Volume_Anomaly', 'PVT', 'year', 'month', 'day', 'dayofweek', 'weekofyear', 'quarter']
-        
-        df_temp = df_raw.copy()
-        
-        # ==========================================
-        # 🧹 BƯỚC SỬA LỖI: LÀM SẠCH DỮ LIỆU RÁC (INF/NAN)
-        # ==========================================
-        df_temp.replace([np.inf, -np.inf], np.nan, inplace=True)
-        df_temp.ffill(inplace=True) # Lấp lỗ hổng bằng dữ liệu ngày hôm trước
-        df_temp.bfill(inplace=True) # Lấp lỗ hổng bằng dữ liệu ngày hôm sau
-        df_temp.fillna(0, inplace=True) # Đảm bảo an toàn 100% không còn NaN
-        
-        # Tạo 6 cột thời gian
-        df_temp["year"] = df_temp.index.year
-        df_temp["month"] = df_temp.index.month
-        df_temp["day"] = df_temp.index.day
-        df_temp["dayofweek"] = df_temp.index.dayofweek
-        df_temp["weekofyear"] = df_temp.index.isocalendar().week.astype(int)
-        df_temp["quarter"] = df_temp.index.quarter
-        
+
+        xgb_features = list(self.xgb_features)
+        df_temp = _prepare_xgb_feature_frame(df_raw)
+
         scaler_ml_X = MinMaxScaler()
         scaler_ml_X.fit(df_temp[xgb_features])
         
@@ -195,6 +219,8 @@ class GoldPredictionEngine:
         
         # Lấy lịch sử SJC từ mảng ĐÃ LÀM SẠCH
         sjc_history = df_temp['SJC'].tolist() 
+        current_price = float(sjc_history[-1]) if sjc_history else 0.0
+        base_price = current_price
         predictions = []
         
         for i in range(1, days + 1):
@@ -212,16 +238,21 @@ class GoldPredictionEngine:
             
             X_input = pd.DataFrame([current_row], columns=xgb_features)
             X_input_scaled = scaler_ml_X.transform(X_input)
-            
-            next_price = float(self.xgb_model.predict(X_input_scaled)[0])
+            predicted_delta = float(self.xgb_model.predict(X_input_scaled)[0])
+            next_price = current_price + predicted_delta
             predictions.append(next_price)
             
+            current_price = next_price
             sjc_history.append(next_price)
             
-        trend = "tăng 📈" if predictions[-1] > predictions[0] else "giảm 📉"
+        trend_predictions, trend_scores, trend = summarize_price_path(base_price, predictions)
+        trend_label = "tăng 📈" if trend == "up" else "giảm 📉" if trend == "down" else "đi ngang"
         return {
             "predictions": predictions, 
-            "trend": trend,
+            "base_price": base_price,
+            "trend": trend_label,
+            "trend_predictions": trend_predictions,
+            "trend_scores": trend_scores,
             "model_used": "XGBoost 🚀"
         }
 
@@ -334,7 +365,7 @@ def _predict_future(self, df_diff, last_actual_sjc_price, days: int):
         current_window_diff = np.vstack([current_window_diff[1:], new_feature_row])
 
     trend = _overall_trend(float(last_actual_sjc_price), predictions)
-    return {"predictions": predictions, "trend": trend}
+    return {"predictions": predictions, "base_price": float(last_actual_sjc_price), "trend": trend}
 
 
 def _predict_future_gru(self, last_actual_sjc_price, days: int):
@@ -384,7 +415,7 @@ def _predict_future_gru(self, last_actual_sjc_price, days: int):
         price_history.append(next_price)
 
     trend = _overall_trend(float(last_actual_sjc_price), predictions)
-    return {"predictions": predictions, "trend": trend}
+    return {"predictions": predictions, "base_price": float(last_actual_sjc_price), "trend": trend}
 
 
 def _predict_trend_classification(self, df_diff):

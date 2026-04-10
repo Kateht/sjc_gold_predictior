@@ -100,6 +100,7 @@ websockets==16.0
 Werkzeug==3.1.8
 wrapt==2.1.2
 yfinance==1.2.0
+xgboost==3.0.3
 sqlalchemy
 SQLAlchemy
 psycopg2-binary

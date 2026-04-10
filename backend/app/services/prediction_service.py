@@ -23,6 +23,11 @@ class PredictionService:
         self.db = db
         self.current_user = current_user
 
+    def _fallback_metrics_json(self, prediction_kind: PredictionKind) -> dict[str, object]:
+        if prediction_kind == PredictionKind.price:
+            return {"mae": None, "rmse": None, "mape": None, "r2": None}
+        return {"accuracy": None}
+
     def _fallback_strategy(self, prediction_kind: PredictionKind | str, model_identifier: str | None) -> str:
         identifier = (model_identifier or "").strip().lower()
         if prediction_kind == PredictionKind.trend or str(prediction_kind) == PredictionKind.trend.value:
@@ -61,7 +66,7 @@ class PredictionService:
             artifact_path=None,
             description="Fallback model metadata used because the model registry could not be read.",
             config_json={"strategy": self._fallback_strategy(prediction_kind, code)},
-            metrics_json={},
+            metrics_json=self._fallback_metrics_json(prediction_kind),
             is_active=True,
             is_default=False,
             created_at=now,

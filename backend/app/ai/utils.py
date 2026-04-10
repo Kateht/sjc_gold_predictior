@@ -123,10 +123,23 @@ def load_and_preprocess_data_for_gemini(csv_path: str):
     from pathlib import Path
     
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
-    actual_path = BASE_DIR / "dataset" / "final_dataset.csv"
-    
-    if not actual_path.exists():
-        raise FileNotFoundError(f"Không tìm thấy file tại: {actual_path}")
+    candidate_paths = []
+    if csv_path:
+        requested_path = Path(csv_path)
+        candidate_paths.append(requested_path if requested_path.is_absolute() else (BASE_DIR / requested_path))
+    candidate_paths.extend(
+        [
+            BASE_DIR / "dataset" / "final_dataset_new.csv",
+            BASE_DIR / "dataset" / "final_dataset.csv",
+            Path(settings.LOCAL_DATASET_PATH),
+            Path(settings.CRAWLER_DATASET_PATH),
+        ]
+    )
+
+    actual_path = next((path for path in candidate_paths if path.exists()), None)
+    if actual_path is None:
+        tried_paths = ", ".join(str(path) for path in candidate_paths)
+        raise FileNotFoundError(f"Không tìm thấy file dataset phù hợp. Đã thử: {tried_paths}")
         
     # Đọc dữ liệu gốc
     df_raw = pd.read_csv(actual_path, index_col=0, parse_dates=True)

@@ -1,0 +1,22 @@
+{
+    "architecture": "Extreme Gradient Boosting (XGBoost)",
+    "timestep": 7,
+    "optimal_threshold": 0.5052646398544312,
+    "target_precision": 0.6,
+    "features_list": [
+        "Gold_return",
+        "SJC_Premium_Zscore",
+        "Bitcoin_return",
+        "Gold_Volume_Anomaly",
+        "Bitcoin_Close",
+        "Gold_volume_rank",
+        "Gold_momentum",
+        "SP500_return",
+        "VNIndex_ETF_return",
+        "SJC_Premium_Percent",
+        "Policy_Risk_Zone",
+        "Shock_Index",
+        "Real_Yield_10Y"
+    ],
+    "description": "Chế độ Năng động (Active Mode) - Tối ưu hóa điểm vào lệnh"
+}
