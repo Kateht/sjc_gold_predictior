@@ -19,12 +19,15 @@ export function Sparkline({ values, labels, accent = '#c9921d', height = 128, cl
     return <div className={`sparkline sparkline--empty ${className ?? ''}`.trim()}>No data</div>;
   }
 
-  const width = Math.max(220, values.length * 12);
+  const width = Math.min(960, Math.max(320, values.length * 4));
   const padding = 8;
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
   const activeIndex = Math.min(Math.max(highlightIndex ?? values.length - 1, 0), values.length - 1);
+  const markerStep = values.length > 240 ? 16 : values.length > 180 ? 12 : values.length > 120 ? 8 : values.length > 60 ? 4 : 1;
+  const markerRadius = values.length > 180 ? 0.55 : values.length > 90 ? 0.75 : 1;
+  const activeRadius = values.length > 180 ? 1.9 : values.length > 90 ? 2.1 : 2.4;
   const points = values.map((value, index) => {
     const x = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
     const y = height - padding - ((value - min) / range) * (height - padding * 2);
@@ -69,18 +72,39 @@ export function Sparkline({ values, labels, accent = '#c9921d', height = 128, cl
             <stop offset="100%" stopColor={accent} stopOpacity="0.04" />
           </linearGradient>
         </defs>
-        {selectedPoint ? <line x1={selectedPoint.x} y1={padding} x2={selectedPoint.x} y2={height - padding} stroke={accent} strokeOpacity="0.18" strokeDasharray="3 4" /> : null}
+        {selectedPoint ? (
+          <line
+            x1={selectedPoint.x}
+            y1={padding}
+            x2={selectedPoint.x}
+            y2={height - padding}
+            stroke={accent}
+            strokeOpacity="0.18"
+            strokeDasharray="3 4"
+            vectorEffect="non-scaling-stroke"
+          />
+        ) : null}
         <path d={areaPath} fill={`url(#${gradientId})`} />
-        <path d={linePath} fill="none" stroke={accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d={linePath}
+          fill="none"
+          stroke={accent}
+          strokeWidth="1.9"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
         {points.map((point, index) => (
           <circle
             key={`${point.x}-${point.y}`}
             cx={point.x}
             cy={point.y}
-            r={index === activeIndex ? 2.6 : index === points.length - 1 ? 1.9 : 1.4}
+            r={index === activeIndex ? activeRadius : index === points.length - 1 || index === 0 || index % markerStep === 0 ? markerRadius : 0}
             fill={index === activeIndex ? '#fff' : accent}
+            fillOpacity={index === activeIndex ? 1 : 0.9}
             stroke={accent}
             strokeWidth={index === activeIndex ? 1.4 : 0}
+            vectorEffect="non-scaling-stroke"
             tabIndex={onPointSelect || onPointHover ? 0 : undefined}
             role={onPointSelect || onPointHover ? 'button' : undefined}
             aria-label={`${labels?.[index] ?? `Point ${index + 1}`}: ${values[index].toLocaleString('en-US', { maximumFractionDigits: 2 })}`}
