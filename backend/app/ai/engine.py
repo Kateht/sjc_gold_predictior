@@ -28,11 +28,12 @@ class GoldPredictionEngine:
         self.feature_cols = self.meta["feature_columns"]
         # 2. LOAD MODEL PHÂN LOẠI (DỰ ĐOÁN XU HƯỚNG)
         # ======================================
-        self.scaler_X_clf = joblib.load(f"{settings.MODEL_DIR}/scaler_X.pkl")
+        self.scaler_X_clf = joblib.load(f"{settings.MODEL_DIR}/scaler_X_classification.pkl")
 
         # Load meta riêng cho classification
-        self.meta_clf = joblib.load(f"{settings.MODEL_DIR}/meta.pkl")
-        self.clf_features = self.meta_clf["features"] 
+        self.meta_clf = joblib.load(f"{settings.MODEL_DIR}/meta_sjc_classification.pkl")
+        scaler_feature_names = getattr(self.scaler_X_clf, "feature_names_in_", None)
+        self.clf_features = list(scaler_feature_names) if scaler_feature_names is not None else self.meta_clf["features"]
         self.clf_time_steps = self.meta_clf["time_steps"] # Giá trị 15
         self.dl_model_clf = tf.keras.models.load_model(
             f"{settings.MODEL_DIR}/sjc_classification.h5", 
@@ -47,9 +48,9 @@ class GoldPredictionEngine:
             # (Nếu JSON không có thì fallback về dùng chung với LSTM)
             self.xgb_features = self.xgb_meta.get("feature_columns", self.feature_cols)
             self.xgb_k = self.xgb_meta.get("best_k", self.best_k)
-            print("✅ Đã load thành công XGBoost Model!")
+            print("Loaded XGBoost model successfully.")
         except Exception as e:
-            print(f"⚠️ Cảnh báo: Không thể load XGBoost Model: {e}")
+            print(f"Warning: could not load XGBoost model: {e}")
             self.xgb_model = None
 
     def predict_future_lstm(self, df_diff, last_actual_sjc_price, days: int):
@@ -96,7 +97,7 @@ class GoldPredictionEngine:
         # Bảo hiểm: Nếu pipeline data ở ngoài lỡ quên cột nào thì điền 0
         for col in self.clf_features: # clf_features lúc này sẽ đọc ra 22 cột
             if col not in df_diff.columns:
-                print(f"⚠️ Warning: Thiếu cột '{col}'. Tự động điền 0.")
+                print(f"Warning: missing column '{col}'. Filling with 0.")
                 df_diff[col] = 0.0
 
         # Lấy 21 ngày gần nhất (clf_time_steps = 21) của 22 cột

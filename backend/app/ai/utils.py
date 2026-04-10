@@ -313,19 +313,30 @@ def load_price_history_frame(source: str = "sjc") -> pd.DataFrame:
         return _synthetic_history()
 
 
+def _resolve_history_window_days(range_value: str | None) -> int | None:
+    normalized = (range_value or "30d").strip().lower()
+    if normalized in {"all", "max", "full"}:
+        return None
+
+    digits = "".join(character for character in normalized if character.isdigit())
+    if not digits:
+        return 30
+
+    amount = max(1, int(digits))
+    if normalized.endswith("y"):
+        return amount * 365
+    if normalized.endswith("m"):
+        return amount * 30
+    return amount
+
+
 def limit_history_frame(frame: pd.DataFrame, range_value: str | None) -> pd.DataFrame:
     if frame.empty:
         return frame
 
-    normalized = (range_value or "30d").strip().lower()
-    if normalized in {"all", "max", "full"}:
+    days = _resolve_history_window_days(range_value)
+    if days is None:
         return frame.reset_index(drop=True)
-
-    digits = "".join(character for character in normalized if character.isdigit())
-    if not digits:
-        return frame.tail(30).reset_index(drop=True)
-
-    days = max(1, int(digits))
     return frame.tail(days).reset_index(drop=True)
 
 
