@@ -22,7 +22,7 @@ COPY --chown=app:app app /app/app
 COPY --chown=app:app dataset /app/dataset
 COPY --chown=app:app entrypoint.sh /app/entrypoint.sh
 
-RUN chmod +x /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 USER app
 

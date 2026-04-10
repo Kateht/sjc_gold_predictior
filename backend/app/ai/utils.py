@@ -176,7 +176,9 @@ def _coerce_feature_frame(frame: pd.DataFrame) -> pd.DataFrame:
         date_column = _detect_date_column(working) or working.columns[0]
 
     if date_column is None:
-        raise ValueError("Could not detect a usable date column")
+        working = working.reset_index(drop=True)
+        working["date"] = pd.date_range(end=pd.Timestamp.utcnow().normalize(), periods=len(working), freq="D")
+        date_column = "date"
 
     if date_column != "date":
         working = working.rename(columns={date_column: "date"})
@@ -185,6 +187,41 @@ def _coerce_feature_frame(frame: pd.DataFrame) -> pd.DataFrame:
     working = working.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
     if working.empty:
         raise ValueError("Feature frame is empty after cleaning")
+    return working
+
+
+def _ensure_trend_feature_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    working = frame.copy()
+
+    if "SJC_Premium" not in working.columns and {"SJC", "Gold_world_vnd"}.issubset(working.columns):
+        sjc_price = pd.to_numeric(working["SJC"], errors="coerce")
+        world_price = pd.to_numeric(working["Gold_world_vnd"], errors="coerce")
+        working["SJC_Premium"] = sjc_price - world_price
+
+    if "SJC_Premium_Zscore" not in working.columns:
+        if "SJC_Premium" in working.columns:
+            premium = pd.to_numeric(working["SJC_Premium"], errors="coerce")
+        else:
+            premium = pd.Series(0.0, index=working.index)
+
+        rolling_mean = premium.rolling(window=30, min_periods=5).mean()
+        rolling_std = premium.rolling(window=30, min_periods=5).std(ddof=0).replace(0, np.nan)
+        zscore = (premium - rolling_mean) / rolling_std
+        working["SJC_Premium_Zscore"] = zscore.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+    if "Policy_Risk_Zone" not in working.columns:
+        risk_source = None
+        for candidate_column in ("Shock_Index", "VIX_Close", "CPI"):
+            if candidate_column in working.columns:
+                risk_source = pd.to_numeric(working[candidate_column], errors="coerce").fillna(0.0)
+                break
+
+        if risk_source is None or risk_source.nunique(dropna=True) < 3:
+            working["Policy_Risk_Zone"] = 0.0
+        else:
+            ranked = risk_source.rank(method="first")
+            working["Policy_Risk_Zone"] = pd.qcut(ranked, q=3, labels=False, duplicates="drop").astype(float)
+
     return working
 
 
@@ -248,6 +285,8 @@ def load_feature_dataset_frame(csv_path: str | Path | None = None, required_colu
         except Exception as exc:
             last_error = exc
             continue
+
+        frame = _ensure_trend_feature_columns(frame)
 
         if required and not required.issubset(set(frame.columns)):
             last_error = ValueError(f"Missing required feature columns in {candidate}")

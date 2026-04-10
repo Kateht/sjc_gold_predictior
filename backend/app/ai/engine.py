@@ -1,4 +1,4 @@
-from app.ai.utils import load_feature_prediction_data
+from app.ai.utils import load_feature_dataset_frame, load_feature_prediction_data
 from app.core.config import settings
 import tensorflow as tf
 import keras
@@ -23,15 +23,34 @@ class GoldPredictionEngine:
         self.scaler_y = joblib.load(f"{settings.MODEL_DIR}/scaler_y_lstm_k10.pkl")
         self.meta = joblib.load(f"{settings.MODEL_DIR}/meta_lstm_k10.pkl")
         self.ml_model = keras.models.load_model(f"{settings.MODEL_DIR}/lstm_k10.keras")
+        try:
+            self.gru_model = keras.models.load_model(f"{settings.MODEL_DIR}/best_gru.h5", compile=False)
+            gru_frame = load_feature_dataset_frame()
+            self.gru_feature_cols = [
+                column
+                for column in gru_frame.columns
+                if column not in {"date", "SJC", "SJC_Premium_Zscore", "Policy_Risk_Zone"}
+            ]
+            expected_gru_features = int(self.gru_model.input_shape[-1]) if getattr(self.gru_model, "input_shape", None) else len(self.gru_feature_cols)
+            if len(self.gru_feature_cols) != expected_gru_features:
+                print(
+                    f"Warning: GRU feature count mismatch: expected {expected_gru_features}, got {len(self.gru_feature_cols)}."
+                )
+            else:
+                print("Loaded GRU model successfully.")
+        except Exception as e:
+            print(f"Warning: could not load GRU model: {e}")
+            self.gru_model = None
+            self.gru_feature_cols = []
         
         self.best_k = self.meta["best_k"]
         self.feature_cols = self.meta["feature_columns"]
         # 2. LOAD MODEL PHÂN LOẠI (DỰ ĐOÁN XU HƯỚNG)
         # ======================================
-        self.scaler_X_clf = joblib.load(f"{settings.MODEL_DIR}/scaler_X_classification.pkl")
+        self.scaler_X_clf = joblib.load(f"{settings.MODEL_DIR}/scaler_X.pkl")
 
         # Load meta riêng cho classification
-        self.meta_clf = joblib.load(f"{settings.MODEL_DIR}/meta_sjc_classification.pkl")
+        self.meta_clf = joblib.load(f"{settings.MODEL_DIR}/meta.pkl")
         scaler_feature_names = getattr(self.scaler_X_clf, "feature_names_in_", None)
         self.clf_features = list(scaler_feature_names) if scaler_feature_names is not None else self.meta_clf["features"]
         self.clf_time_steps = self.meta_clf["time_steps"] # Giá trị 15
@@ -260,6 +279,7 @@ def classify_price_path(last_price, predicted_prices):
 
 
 PRICE_ARTIFACT_MODEL_CODES = {"lstm-k10-price-v1", "meta-lstm-k10-price-v1"}
+GRU_ARTIFACT_MODEL_CODES = {"gru-price-v1"}
 TREND_ARTIFACT_MODEL_CODES = {"sjc-classification-v1"}
 
 
@@ -317,6 +337,56 @@ def _predict_future(self, df_diff, last_actual_sjc_price, days: int):
     return {"predictions": predictions, "trend": trend}
 
 
+def _predict_future_gru(self, last_actual_sjc_price, days: int):
+    if getattr(self, "gru_model", None) is None:
+        return self.predict_future(load_feature_prediction_data(required_columns=set(self.feature_cols) | {"SJC"})[0], last_actual_sjc_price, days)
+
+    feature_frame = load_feature_dataset_frame()
+    feature_columns = list(
+        getattr(self, "gru_feature_cols", None)
+        or [column for column in feature_frame.columns if column not in {"date", "SJC", "SJC_Premium_Zscore", "Policy_Risk_Zone"}]
+    )
+    if not feature_columns:
+        return {"predictions": [], "trend": "flat"}
+
+    working = feature_frame.sort_values("date").reset_index(drop=True)
+    current_row = working[feature_columns].tail(1).iloc[0].copy()
+    price_history = working["SJC"].astype(float).tolist() if "SJC" in working.columns else [float(last_actual_sjc_price)]
+    premium_history = working["SJC_Premium"].astype(float).tolist() if "SJC_Premium" in working.columns else []
+    current_price = float(last_actual_sjc_price)
+    world_price = float(current_row.get("Gold_world_vnd", current_price)) or float(current_price)
+    policy_risk_zone = float(current_row.get("Policy_Risk_Zone", 0.0))
+    predictions = []
+
+    for _ in range(days):
+        current_row["SJC_lag1"] = price_history[-1]
+        current_row["SJC_lag7"] = price_history[-7] if len(price_history) >= 7 else price_history[-1]
+        current_row["SJC_ma7"] = float(np.mean(price_history[-7:])) if len(price_history) >= 7 else price_history[-1]
+
+        premium = current_price - world_price
+        current_row["SJC_Premium"] = premium
+        current_row["SJC_Premium_Percent"] = (premium / world_price * 100.0) if world_price else 0.0
+        premium_history.append(premium)
+        trailing_premium = np.asarray(premium_history[-30:], dtype=float)
+        if trailing_premium.size >= 2:
+            premium_std = float(np.std(trailing_premium))
+            current_row["SJC_Premium_Zscore"] = float((premium - float(np.mean(trailing_premium))) / premium_std) if premium_std else 0.0
+        else:
+            current_row["SJC_Premium_Zscore"] = 0.0
+        current_row["Policy_Risk_Zone"] = policy_risk_zone
+
+        input_values = pd.to_numeric(current_row[feature_columns], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0).to_numpy(dtype=float).reshape(1, 1, len(feature_columns))
+        predicted_delta = float(np.ravel(self.gru_model.predict(input_values, verbose=0))[0])
+        next_price = current_price + predicted_delta
+        predictions.append(float(next_price))
+
+        current_price = next_price
+        price_history.append(next_price)
+
+    trend = _overall_trend(float(last_actual_sjc_price), predictions)
+    return {"predictions": predictions, "trend": trend}
+
+
 def _predict_trend_classification(self, df_diff):
     latest_data_diff = self._prepare_feature_window(df_diff, self.clf_features, self.clf_time_steps)
     X_input_scaled = self.scaler_X_clf.transform(latest_data_diff)
@@ -345,6 +415,7 @@ def _predict_trend_classification(self, df_diff):
 
 GoldPredictionEngine._prepare_feature_window = _prepare_feature_window
 GoldPredictionEngine.predict_future = _predict_future
+GoldPredictionEngine.predict_future_gru = _predict_future_gru
 GoldPredictionEngine.predict_trend_classification = _predict_trend_classification
 
 
@@ -457,6 +528,11 @@ def forecast_price_path(history_prices, days, strategy="default", provider="buil
     history = _coerce_history_prices(history_prices)
     if not history or days <= 0:
         return [], False
+
+    if provider == "artifact" and source == "sjc" and model_code in GRU_ARTIFACT_MODEL_CODES:
+        engine = _get_engine()
+        result = engine.predict_future_gru(history[-1], days)
+        return result["predictions"], False
 
     if provider == "artifact" and source == "sjc" and model_code in PRICE_ARTIFACT_MODEL_CODES:
         engine = _get_engine()

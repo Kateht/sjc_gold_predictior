@@ -72,6 +72,18 @@ def seed_default_models(db: Session) -> None:
             "is_active": True,
         },
         {
+            "code": "gru-price-v1",
+            "name": "Best GRU Price Model",
+            "prediction_kind": "price",
+            "provider": "artifact",
+            "artifact_path": "app/models/best_gru.h5",
+            "description": "Artifact-backed GRU model for price forecasting",
+            "config_json": {"strategy": "gru", "feature_count": 28, "lookback": 1},
+            "metrics_json": {"mae": None, "rmse": None},
+            "is_default": False,
+            "is_active": True,
+        },
+        {
             "code": "sjc-classification-v1",
             "name": "SJC Direction Classifier",
             "prediction_kind": "trend",

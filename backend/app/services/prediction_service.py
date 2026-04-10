@@ -27,6 +27,8 @@ class PredictionService:
         identifier = (model_identifier or "").strip().lower()
         if prediction_kind == PredictionKind.trend or str(prediction_kind) == PredictionKind.trend.value:
             return "slope"
+        if "gru" in identifier:
+            return "gru"
         if "momentum" in identifier:
             return "momentum"
         if "mean-reversion" in identifier or "mean_reversion" in identifier:
@@ -38,6 +40,7 @@ class PredictionService:
         artifact_codes = {
             "meta-lstm-k10-price-v1",
             "lstm-k10-price-v1",
+            "gru-price-v1",
             "sjc-classification-v1",
         }
         if identifier in artifact_codes:
