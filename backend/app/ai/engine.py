@@ -19,10 +19,10 @@ keras.layers.Dense.__init__ = _patched_dense_init
 class GoldPredictionEngine:
     def __init__(self):
         # Load models & scalers từ weights/ LSTM
-        self.scaler_X = joblib.load(f"{settings.MODEL_DIR}/scaler_X_lstm_k10.pkl")
-        self.scaler_y = joblib.load(f"{settings.MODEL_DIR}/scaler_y_lstm_k10.pkl")
-        self.meta = joblib.load(f"{settings.MODEL_DIR}/meta_lstm_k10.pkl")
-        self.ml_model = keras.models.load_model(f"{settings.MODEL_DIR}/lstm_k10.keras")
+        self.scaler_X = joblib.load(f"{settings.MODEL_DIR}/scaler_X_lstm_v5.pkl")
+        self.scaler_y = joblib.load(f"{settings.MODEL_DIR}/scaler_y_lstm_v5.pkl")
+        self.meta = joblib.load(f"{settings.MODEL_DIR}/meta_lstm_v5.pkl")
+        self.ml_model = keras.models.load_model(f"{settings.MODEL_DIR}/lstm_v5.keras")
         
         self.best_k = self.meta["best_k"]
         self.feature_cols = self.meta["feature_columns"]
