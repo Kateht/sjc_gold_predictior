@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 
+import app.crawler.GetVietNameseGoldPrice.build_final_dataset as fd
 import app.crawler.GetVietNameseGoldPrice.Update_gia_vang as ug
 import app.crawler.GetVietNameseGoldPrice.Update_final_uso_usd as uf
 import app.crawler.GetVietNameseGoldPrice.merge_outputs as mo
@@ -93,7 +94,18 @@ def _load_config(config_path: str | None) -> dict:
         config.update(raw)
 
     base_dir = path.parent if path.exists() else ROOT_DIR
-    for key in ("csv_path", "xauusd_cache_path", "backup_csv_path", "log_dir", "lock_path"):
+    for key in (
+        "csv_path",
+        "xauusd_cache_path",
+        "backup_csv_path",
+        "log_dir",
+        "lock_path",
+        "final_uso_csv",
+        "vn_gold_usd_oz_csv",
+        "final_uso_usd_with_vn_gold_usd_oz_csv",
+        "final_uso_usd_with_vn_gold_usd_oz_imputed_csv",
+        "final_uso_with_vn_gold_vnd_thousand_imputed_csv",
+    ):
         config[key] = _resolve_path(config.get(key), base_dir)
 
     config["default_start_date"] = str(config.get("default_start_date", DEFAULT_CONFIG["default_start_date"]))
@@ -125,8 +137,14 @@ class TeeTextIO(io.TextIOBase):
         return len(text)
 
     def flush(self):
-        self._primary.flush()
-        self._mirror.flush()
+        try:
+            self._primary.flush()
+        except ValueError:
+            pass
+        try:
+            self._mirror.flush()
+        except ValueError:
+            pass
 
     def isatty(self):
         return bool(getattr(self._primary, "isatty", lambda: False)())
@@ -265,7 +283,9 @@ def _print_csv_summary(csv_path: str, *, label: str = "CSV summary") -> None:
     df = pd.read_csv(path)
     date_col = "Ngày" if "Ngày" in df.columns else ("Date" if "Date" in df.columns else None)
     if date_col is not None:
-        dates = pd.to_datetime(df[date_col], dayfirst=True, errors="coerce").dropna()
+        sample_values = df[date_col].dropna().astype(str).head(20)
+        use_dayfirst = any("/" in value for value in sample_values)
+        dates = pd.to_datetime(df[date_col], dayfirst=use_dayfirst, errors="coerce").dropna()
         if len(dates):
             print(f"{label}: rows={len(df)}, range={dates.min().date()} -> {dates.max().date()}")
         else:
@@ -526,6 +546,21 @@ def cmd_update_final_uso(args: argparse.Namespace, config: dict) -> None:
     print(f"Updated final_uso_usd.csv: {start.strftime('%d/%m/%Y')} -> {end.strftime('%d/%m/%Y')}")
 
 
+def cmd_final_dataset(args: argparse.Namespace, config: dict) -> None:
+    start = _parse_date(args.start, default=date(2009, 1, 1))
+    end = _parse_date(args.end, default=date.today()) if args.end else date.today()
+    if start > end:
+        raise ValueError("start must be <= end")
+
+    output_path = fd.build_final_dataset(
+        gold_csv_path=Path(str(config["csv_path"])),
+        start_date=start,
+        end_date=end,
+    )
+    print(f"Built final_dataset.csv: {start.strftime('%d/%m/%Y')} -> {end.strftime('%d/%m/%Y')}")
+    _print_csv_summary(str(output_path), label="final_dataset")
+
+
 def interactive(config: dict) -> None:
     print("\nGold Updater CLI")
     _print_paths(config)
@@ -539,26 +574,28 @@ def interactive(config: dict) -> None:
             print("  3) Update + refresh XAUUSD cache đến hôm nay")
             print("  4) Pipeline đầy đủ (update + refresh + merge)")
             print("  5) Update final_uso_usd.csv")
-            print("  6) Report missing trong khoảng ngày")
-            print("  7) In config hiện tại")
-            print("  8) In lại đường dẫn file")
+            print("  6) Build final_dataset.csv")
+            print("  7) Report missing trong khoảng ngày")
+            print("  8) In config hiện tại")
+            print("  9) In lại đường dẫn file")
             print("  0) Thoát")
             choice = input("Nhập lựa chọn: ").strip()
 
             if choice == "0":
                 return
-            if choice == "7":
+            if choice == "8":
                 _print_config(config)
                 continue
-            if choice == "8":
+            if choice == "9":
                 _print_paths(config)
                 continue
 
-            if choice in {"1", "2", "3", "4", "5", "6"}:
-                start_text = input(f"Start date ({DATE_HINT}) (default {config['default_start_date']}): ").strip()
+            if choice in {"1", "2", "3", "4", "5", "6", "7"}:
+                default_start_text = "01/01/2009" if choice == "6" else config["default_start_date"]
+                start_text = input(f"Start date ({DATE_HINT}) (default {default_start_text}): ").strip()
                 start_value = start_text if start_text else None
                 end_value = None
-                if choice in {"1", "2", "6"}:
+                if choice in {"1", "2", "7"}:
                     end_text = input(f"End date ({DATE_HINT}) (blank=today): ").strip()
                     end_value = end_text if end_text else None
 
@@ -625,6 +662,11 @@ def interactive(config: dict) -> None:
 
             if choice == "6":
                 args = argparse.Namespace(start=start_value, end=end_value)
+                cmd_final_dataset(args, config)
+                continue
+
+            if choice == "7":
+                args = argparse.Namespace(start=start_value, end=end_value)
                 cmd_report(args, config)
                 continue
 
@@ -638,7 +680,7 @@ def interactive(config: dict) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gold_cli",
-        description="Update/backfill VN gold CSV (PNJ/SJC) + XAUUSD cache.",
+        description="Update/backfill VN gold CSV (PNJ/SJC), XAUUSD cache, and feature datasets.",
     )
     parser.add_argument("--config", default=None, help=f"Path to JSON config file (default: {DEFAULT_CONFIG_PATH})")
 
@@ -689,6 +731,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--start", default=None, help="Start date (default: 10/04/2006)")
     sp.add_argument("--end", default=None, help=f"End date ({DATE_HINT}); default=today")
     sp.set_defaults(func=cmd_update_final_uso)
+
+    sp = sub.add_parser("final-dataset", help="Build backend/dataset/final_dataset.csv from raw gold + macro market data")
+    sp.add_argument("--start", default=None, help="Start date (default: 01/01/2009)")
+    sp.add_argument("--end", default=None, help=f"End date ({DATE_HINT}); default=today")
+    sp.set_defaults(func=cmd_final_dataset)
 
     return parser
 

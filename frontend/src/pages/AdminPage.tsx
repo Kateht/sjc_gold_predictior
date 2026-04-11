@@ -400,6 +400,7 @@ export function AdminPage() {
                   <option value="update-backfill">update-backfill</option>
                   <option value="backfill-xauusd">backfill-xauusd</option>
                   <option value="final-uso">final-uso</option>
+                  <option value="final-dataset">final-dataset</option>
                 </select>
               </label>
               <label className="field">

@@ -86,7 +86,12 @@ class GoldPredictionEngine:
         # Load meta riêng cho classification
         self.meta_clf = joblib.load(f"{settings.MODEL_DIR}/meta.pkl")
         scaler_feature_names = getattr(self.scaler_X_clf, "feature_names_in_", None)
-        self.clf_features = list(scaler_feature_names) if scaler_feature_names is not None else self.meta_clf["features"]
+        self.clf_scaler_features = list(scaler_feature_names) if scaler_feature_names is not None else list(self.meta_clf.get("features", []))
+        self.clf_features = list(self.meta_clf.get("features") or self.clf_scaler_features)
+        if self.clf_scaler_features and self.clf_features and len(self.clf_scaler_features) != len(self.clf_features):
+            print(
+                f"Warning: classification feature mismatch: scaler has {len(self.clf_scaler_features)}, model expects {len(self.clf_features)}."
+            )
         self.clf_time_steps = self.meta_clf["time_steps"] # Giá trị 15
         self.dl_model_clf = tf.keras.models.load_model(
             f"{settings.MODEL_DIR}/sjc_classification.h5", 
@@ -419,9 +424,30 @@ def _predict_future_gru(self, last_actual_sjc_price, days: int):
 
 
 def _predict_trend_classification(self, df_diff):
-    latest_data_diff = self._prepare_feature_window(df_diff, self.clf_features, self.clf_time_steps)
-    X_input_scaled = self.scaler_X_clf.transform(latest_data_diff)
-    X_input = X_input_scaled.reshape(1, self.clf_time_steps, len(self.clf_features))
+    from sklearn.preprocessing import MinMaxScaler
+
+    model_features = list(getattr(self, "clf_features", []))
+    if not model_features:
+        return {
+            "predicted_trend": "Giảm",
+            "confidence_percent": 0.0,
+            "up_probability": 0.0,
+            "down_probability": 100.0,
+        }
+
+    latest_data_diff = self._prepare_feature_window(df_diff, model_features, self.clf_time_steps)
+
+    scaler_frame = df_diff.copy()
+    for column in model_features:
+        if column not in scaler_frame.columns:
+            scaler_frame[column] = 0.0
+
+    scaler_frame = scaler_frame[model_features].apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    trend_scaler = MinMaxScaler()
+    trend_scaler.fit(scaler_frame)
+    X_input_scaled = trend_scaler.transform(latest_data_diff)
+
+    X_input = X_input_scaled.reshape(1, self.clf_time_steps, len(model_features))
 
     pred_prob = self.dl_model_clf.predict(X_input, verbose=0)
     prob = np.ravel(pred_prob)

@@ -415,10 +415,9 @@ class GoldAIService:
 
         lines.extend([
             "",
-            "Điểm cần theo dõi:",
+            "Điểm cần lưu ý:",
             f"- Khoảng giá ước tính: {min_price:,.2f} đến {max_price:,.2f} triệu VND/lượng.",
-            "- Các phần trăm bên trên là mức thay đổi giá dự báo, không phải xác suất gốc của mô hình.",
-            "- Tôi có thể so sánh thêm với giá thế giới, model đang chọn, hoặc lịch sử gần nhất nếu bạn muốn.",
+            "- Nếu bạn muốn, tôi có thể so sánh thêm với giá thế giới, mô hình đang dùng hoặc lịch sử gần nhất.",
         ])
 
         return "\n".join(lines)

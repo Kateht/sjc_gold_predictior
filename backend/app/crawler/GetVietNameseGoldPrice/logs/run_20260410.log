@@ -1,0 +1,214 @@
+
+--- 2026-04-10T23:42:57 ---
+Run started: 2026-04-10T23:42:57
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260410.log
+Khoảng kiểm tra: 01/04/2026 -> 10/04/2026
+Ngày thiếu toàn bộ 4 cột (toàn NaN): 6
+['05/04/2026', '06/04/2026', '07/04/2026', '08/04/2026', '09/04/2026', '10/04/2026']
+Ngày thiếu ít nhất 1 cột: 6
+['05/04/2026', '06/04/2026', '07/04/2026', '08/04/2026', '09/04/2026', '10/04/2026']
+
+--- 2026-04-10T23:43:20 ---
+Run started: 2026-04-10T23:43:20
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260410.log
+
+--- 2026-04-10T23:45:49 ---
+Run started: 2026-04-10T23:45:49
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CTU227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260410.log
+Legacy USO rebuild unavailable; kept existing file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_usd.csv
+Reason: USO series returned no data for the requested range.
+Updated final_uso_usd.csv: 01/04/2026 -> 10/04/2026
+
+--- 2026-04-10T23:46:08 ---
+Run started: 2026-04-10T23:46:08
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260410.log
+XAUUSD cache refreshed: range=01/04/2026→10/04/2026, rows_or_cells=0
+XAUUSD cache: rows=5021, range=2006-01-05 -> 2026-12-03
+XAUUSD cache: missing% by column
+  - Open: 0.000%
+  - High: 0.000%
+  - Low: 0.000%
+  - Close: 0.000%
+
+--- 2026-04-10T23:46:32 ---
+Run started: 2026-04-10T23:46:32
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260410.log
+Saved CSV: inserted=6, updated_missing=0 -> E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gia_vang_pnj_sjc.csv
+Đã forward-fill các ngày còn trống trong khoảng.
+Update complete: crawled=6, inserted=6, updated_rows=0, crawl_filled_cells=22, forward_fill_cells=2, total_filled=24
+Update complete: rows=6099, range=2009-07-22 -> 2026-04-10
+Update complete: missing% by column
+  - PNJ_gia_mua: 16.445%
+  - PNJ_gia_ban: 16.445%
+  - SJC_gia_mua: 6.952%
+  - SJC_gia_ban: 6.952%
+
+--- 2026-04-10T23:46:55 ---
+Run started: 2026-04-10T23:46:55
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260410.log
+Saved CSV: inserted=0, updated_missing=0 -> E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gia_vang_pnj_sjc.csv
+Đã forward-fill các ngày còn trống trong khoảng.
+Update + XAUUSD cache refresh done: range=01/04/2026→10/04/2026, rows_or_cells=0
+Update + Backfill: crawled=0, inserted=0, updated_rows=0, crawl_filled_cells=0, forward_fill_cells=0, total_filled=0
+Update + Backfill: rows=6099, range=2009-07-22 -> 2026-04-10
+Update + Backfill: missing% by column
+  - PNJ_gia_mua: 16.445%
+  - PNJ_gia_ban: 16.445%
+  - SJC_gia_mua: 6.952%
+  - SJC_gia_ban: 6.952%
+
+--- 2026-04-10T23:47:17 ---
+Run started: 2026-04-10T23:47:17
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260410.log
+Saved CSV: inserted=0, updated_missing=0 -> E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gia_vang_pnj_sjc.csv
+Đã forward-fill các ngày còn trống trong khoảng.
+Pipeline XAUUSD cache refresh done: range=01/04/2026→10/04/2026, rows_or_cells=0
+
+--- 2026-04-10T23:49:09 ---
+Run started: 2026-04-10T23:49:09
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260410.log
+Saved CSV: inserted=0, updated_missing=0 -> E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gia_vang_pnj_sjc.csv
+Đã forward-fill các ngày còn trống trong khoảng.
+Pipeline XAUUSD cache refresh done: range=01/04/2026→10/04/2026, rows_or_cells=0
+Wrote: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gia_vang_pnj_sjc_usd_oz.csv
+Wrote: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_usd_with_vn_gold_usd_oz.csv
+Wrote: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_usd_with_vn_gold_usd_oz_imputed.csv
+Wrote: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_with_vn_gold_vnd_thousand_imputed.csv
+Pipeline outputs:
+- E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gia_vang_pnj_sjc_usd_oz.csv
+- E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_usd_with_vn_gold_usd_oz.csv
+- E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_usd_with_vn_gold_usd_oz_imputed.csv
+- E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_with_vn_gold_vnd_thousand_imputed.csv
+Pipeline update: crawled=0, inserted=0, updated_rows=0, crawl_filled_cells=0, forward_fill_cells=0, total_filled=0
+Pipeline update: rows=6099, range=2009-07-22 -> 2026-04-10
+Pipeline update: missing% by column
+  - PNJ_gia_mua: 16.445%
+  - PNJ_gia_ban: 16.445%
+  - SJC_gia_mua: 6.952%
+  - SJC_gia_ban: 6.952%
+
+--- 2026-04-10T23:49:51 ---
+Run started: 2026-04-10T23:49:51
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CTU227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260410.log
+Saved CSV: inserted=0, updated_missing=0 -> E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gia_vang_pnj_sjc.csv
+Đã forward-fill các ngày còn trống trong khoảng.
+Pipeline XAUUSD cache refresh done: range=01/04/2026→10/04/2026, rows_or_cells=0
+Wrote: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gia_vang_pnj_sjc_usd_oz.csv
+Wrote: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_usd_with_vn_gold_usd_oz.csv
+Wrote: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_usd_with_vn_gold_usd_oz_imputed.csv
+Wrote: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_with_vn_gold_vnd_thousand_imputed.csv
+Pipeline outputs:
+- E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gia_vang_pnj_sjc_usd_oz.csv
+- E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_usd_with_vn_gold_usd_oz.csv
+- E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_usd_with_vn_gold_usd_oz_imputed.csv
+- E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\final_uso_with_vn_gold_vnd_thousand_imputed.csv
+Pipeline update: crawled=0, inserted=0, updated_rows=0, crawl_filled_cells=0, forward_fill_cells=0, total_filled=0
+Pipeline update: rows=6099, range=2009-07-22 -> 2026-04-10
+Pipeline update: missing% by column
+  - PNJ_gia_mua: 16.445%
+  - PNJ_gia_ban: 16.445%
+  - SJC_gia_mua: 6.952%
+  - SJC_gia_ban: 6.952%
+
+--- 2026-04-10T23:50:18 ---
+Run started: 2026-04-10T23:50:18
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260410.log
+Live market fetch failed, using cached dataset seed: Không thể tải dữ liệu từ FRED
+Built final_dataset.csv: 01/04/2026 -> 10/04/2026
+final_dataset: rows=3, range=2026-08-04 -> 2026-10-04
+final_dataset: missing% by column
+  - SJC: 0.000%
+  - Interest: 0.000%
+  - CPI: 0.000%
+  - Real_Yield_10Y: 0.000%
+  - Gold_Close: 0.000%
+  - Gold_High: 0.000%
+  - Gold_Low: 0.000%
+  - Gold_Volume: 0.000%
+  - USD_index_Close: 0.000%
+  - Oil_Close: 0.000%
+  - USD_VND_Close: 0.000%
+  - GVZ_Close: 0.000%
+  - VIX_Close: 0.000%
+  - ETF_Holdings_Close: 0.000%
+  - MOVE_Index_Close: 0.000%
+  - SP500_Close: 0.000%
+  - VNIndex_ETF_Close: 0.000%
+  - Bitcoin_Close: 0.000%
+  - Gold_world_vnd: 0.000%
+  - SJC_Premium: 0.000%
+  - SJC_Premium_Percent: 0.000%
+  - Shock_Index: 0.000%
+  - Gold_SP500_Ratio: 0.000%
+  - SJC_Premium_Zscore: 0.000%
+  - Policy_Risk_Zone: 0.000%
+  - SJC_lag1: 0.000%
+  - SJC_lag7: 0.000%
+  - SJC_ma7: 0.000%
+  - Gold_return: 0.000%
+  - Gold_volume_rank: 0.000%
+  - Gold_range: 0.000%
+  - Gold_volatility_7: 0.000%
+  - Gold_momentum: 0.000%
+  - Gold_Volume_Anomaly: 0.000%
+  - PVT: 0.000%
+  - SP500_return: 0.000%
+  - VNIndex_ETF_return: 0.000%
+  - Bitcoin_return: 0.000%
+
+--- 2026-04-10T23:52:21 ---
+Run started: 2026-04-10T23:52:21
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260410.log
+Live market fetch failed, using cached dataset seed: Không thể tải dữ liệu từ FRED
+Built final_dataset.csv: 01/04/2026 -> 10/04/2026
+final_dataset: rows=3, range=2026-04-08 -> 2026-04-10
+final_dataset: missing% by column
+  - SJC: 0.000%
+  - Interest: 0.000%
+  - CPI: 0.000%
+  - Real_Yield_10Y: 0.000%
+  - Gold_Close: 0.000%
+  - Gold_High: 0.000%
+  - Gold_Low: 0.000%
+  - Gold_Volume: 0.000%
+  - USD_index_Close: 0.000%
+  - Oil_Close: 0.000%
+  - USD_VND_Close: 0.000%
+  - GVZ_Close: 0.000%
+  - VIX_Close: 0.000%
+  - ETF_Holdings_Close: 0.000%
+  - MOVE_Index_Close: 0.000%
+  - SP500_Close: 0.000%
+  - VNIndex_ETF_Close: 0.000%
+  - Bitcoin_Close: 0.000%
+  - Gold_world_vnd: 0.000%
+  - SJC_Premium: 0.000%
+  - SJC_Premium_Percent: 0.000%
+  - Shock_Index: 0.000%
+  - Gold_SP500_Ratio: 0.000%
+  - SJC_Premium_Zscore: 0.000%
+  - Policy_Risk_Zone: 0.000%
+  - SJC_lag1: 0.000%
+  - SJC_lag7: 0.000%
+  - SJC_ma7: 0.000%
+  - Gold_return: 0.000%
+  - Gold_volume_rank: 0.000%
+  - Gold_range: 0.000%
+  - Gold_volatility_7: 0.000%
+  - Gold_momentum: 0.000%
+  - Gold_Volume_Anomaly: 0.000%
+  - PVT: 0.000%
+  - SP500_return: 0.000%
+  - VNIndex_ETF_return: 0.000%
+  - Bitcoin_return: 0.000%

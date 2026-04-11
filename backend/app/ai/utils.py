@@ -129,7 +129,6 @@ def load_and_preprocess_data_for_gemini(csv_path: str):
         candidate_paths.append(requested_path if requested_path.is_absolute() else (BASE_DIR / requested_path))
     candidate_paths.extend(
         [
-            BASE_DIR / "dataset" / "final_dataset_new.csv",
             BASE_DIR / "dataset" / "final_dataset.csv",
             Path(settings.LOCAL_DATASET_PATH),
             Path(settings.CRAWLER_DATASET_PATH),
@@ -271,7 +270,6 @@ def _feature_dataset_candidates(csv_path: str | Path | None = None) -> list[Path
     candidates.extend(
         [
             (base_dir / "dataset" / "final_dataset.csv").resolve(),
-            (base_dir / "dataset" / "final_dataset_new.csv").resolve(),
             Path(settings.LOCAL_DATASET_PATH),
             Path(settings.CRAWLER_DATASET_PATH),
         ]
