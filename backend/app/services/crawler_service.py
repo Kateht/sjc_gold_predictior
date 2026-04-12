@@ -21,6 +21,7 @@ MAX_OUTPUT_CHARS = 20000
 MAX_WORKERS = 2
 logger = logging.getLogger(__name__)
 _crawler_executor = ThreadPoolExecutor(max_workers=MAX_WORKERS, thread_name_prefix="crawler-worker")
+TASKS_WITH_END_DATE = {"update", "backfill-xauusd", "report", "final-uso", "final-dataset"}
 
 
 def list_crawler_runs(db: Session, limit: int = 20) -> list[CrawlerRun]:
@@ -43,10 +44,11 @@ def _build_crawler_command(payload: CrawlerRunCreate) -> list[str]:
 
     if payload.start:
         command.extend(["--start", payload.start.isoformat()])
-    if payload.end:
+    if payload.end and payload.task.value in TASKS_WITH_END_DATE:
         command.extend(["--end", payload.end.isoformat()])
 
-    # gold_cli only supports these flags for update/update-backfill/pipeline.
+    # gold_cli only supports these runtime flags for update/update-backfill/pipeline.
+    # End dates are forwarded only for tasks that explicitly accept them.
     if payload.task.value in {"update", "update-backfill", "pipeline"}:
         if payload.no_forward_fill:
             command.append("--no-forward-fill")

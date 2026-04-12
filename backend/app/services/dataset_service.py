@@ -4,6 +4,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.db.models import DatasetSource
 from app.schemas.source import DatasetSourceCreate, DatasetSourceUpdate
@@ -84,6 +85,16 @@ def set_dataset_source_active(db: Session, source: DatasetSource, active: bool) 
 
 def export_dataset_source_csv(source: DatasetSource) -> Path:
     path = Path(source.csv_path)
+    if not path.exists():
+        fallback_paths = {
+            "sjc-history-csv": Path(settings.LOCAL_DATASET_PATH),
+            "crawler-export-csv": Path(settings.CRAWLER_DATASET_PATH),
+            "merged-market-csv": Path(settings.PROJECT_ROOT) / "app/crawler/GetVietNameseGoldPrice/final_uso_with_vn_gold_vnd_thousand_imputed.csv",
+        }
+        fallback_path = fallback_paths.get(source.code)
+        if fallback_path and fallback_path.exists():
+            path = fallback_path
+
     if not path.exists():
         raise NotFoundError(f"Dataset CSV not found: {path}")
     if path.suffix.lower() != ".csv":

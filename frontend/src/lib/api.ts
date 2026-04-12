@@ -134,6 +134,24 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return (await response.text()) as T;
 }
 
+function filenameFromContentDisposition(contentDisposition: string | null): string | null {
+  if (!contentDisposition) {
+    return null;
+  }
+
+  const utf8FilenameMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8FilenameMatch?.[1]) {
+    try {
+      return decodeURIComponent(utf8FilenameMatch[1]);
+    } catch {
+      return utf8FilenameMatch[1];
+    }
+  }
+
+  const filenameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  return filenameMatch?.[1] ?? null;
+}
+
 export async function downloadCsv(path: string, filename: string, params?: Record<string, QueryValue>): Promise<void> {
   const response = await fetch(buildUrl(path, params), {
     headers: buildHeaders(undefined, true, false),
@@ -151,12 +169,15 @@ export async function downloadCsv(path: string, filename: string, params?: Recor
   }
 
   const blob = await response.blob();
+  const resolvedFilename = filenameFromContentDisposition(response.headers.get('content-disposition')) ?? filename;
   const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement('a');
+  document.body.appendChild(anchor);
   anchor.href = url;
-  anchor.download = filename;
+  anchor.download = resolvedFilename;
   anchor.click();
-  window.URL.revokeObjectURL(url);
+  anchor.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
 }
 
 export function getCurrentSession(): AuthSession | null {

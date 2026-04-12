@@ -90,7 +90,7 @@ export function HistoryPage() {
     setExporting(true);
     setError('');
     try {
-      await exportMyHistoryCsv();
+      await exportMyHistoryCsv(kindFilter === 'all' ? {} : { prediction_kind: kindFilter });
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : 'Failed to export history');
     } finally {

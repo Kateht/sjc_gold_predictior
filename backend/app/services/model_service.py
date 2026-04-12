@@ -7,6 +7,9 @@ from app.db.models import MLModel
 from app.schemas.models import ModelCreate, ModelUpdate, PredictionKind
 
 
+DEPRECATED_MODEL_CODES = {"best-xgb-price-v1"}
+
+
 def _kind_value(kind: PredictionKind | str | None) -> str | None:
     if kind is None:
         return None
@@ -22,6 +25,7 @@ def list_models(db: Session, prediction_kind: PredictionKind | str | None = None
         query = query.filter(MLModel.prediction_kind == kind_value)
     if active_only:
         query = query.filter(MLModel.is_active.is_(True))
+    query = query.filter(~MLModel.code.in_(DEPRECATED_MODEL_CODES))
     return query.order_by(MLModel.is_default.desc(), MLModel.id.asc()).all()
 
 
@@ -37,6 +41,7 @@ def get_model_by_identifier(
         query = query.filter(MLModel.prediction_kind == kind_value)
     if active_only:
         query = query.filter(MLModel.is_active.is_(True))
+    query = query.filter(~MLModel.code.in_(DEPRECATED_MODEL_CODES))
 
     if identifier is None or str(identifier).strip() == "":
         default_model = query.filter(MLModel.is_default.is_(True)).order_by(MLModel.id.asc()).first()
@@ -57,6 +62,9 @@ def get_default_model(db: Session, prediction_kind: PredictionKind | str) -> MLM
 
 
 def create_model(db: Session, payload: ModelCreate, created_by_id: int | None = None) -> MLModel:
+    if payload.code in DEPRECATED_MODEL_CODES:
+        raise ConflictError("Model code is deprecated")
+
     existing = db.query(MLModel).filter(MLModel.code == payload.code).first()
     if existing:
         raise ConflictError("Model code already exists")

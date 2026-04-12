@@ -1,3 +1,6 @@
+from pathlib import Path
+import warnings
+
 from app.ai.utils import load_feature_dataset_frame, load_feature_prediction_data
 from app.core.config import settings
 import tensorflow as tf
@@ -6,38 +9,39 @@ import numpy as np
 import pandas as pd
 import joblib
 import json
+from sklearn.preprocessing import MinMaxScaler
 
-
-XGB_FEATURE_COLUMNS = [
+GRU_FEATURE_COLUMNS = [
     'Interest', 'CPI', 'Real_Yield_10Y', 'Gold_Close', 'Gold_High', 'Gold_Low', 'Gold_Volume',
     'USD_index_Close', 'Oil_Close', 'USD_VND_Close', 'GVZ_Close', 'VIX_Close', 'ETF_Holdings_Close',
     'MOVE_Index_Close', 'Gold_world_vnd', 'SJC_Premium', 'SJC_Premium_Percent', 'Shock_Index',
     'SJC_lag1', 'SJC_lag7', 'SJC_ma7', 'Gold_return', 'Gold_volume_rank', 'Gold_range',
-    'Gold_volatility_7', 'Gold_momentum', 'Gold_Volume_Anomaly', 'PVT', 'year', 'month', 'day',
-    'dayofweek', 'weekofyear', 'quarter'
+    'Gold_volatility_7', 'Gold_momentum', 'Gold_Volume_Anomaly', 'PVT'
+]
+
+TREND_XGB_FEATURE_COLUMNS = [
+    'Gold_return', 'SJC_Premium_Zscore', 'Bitcoin_return', 'Gold_Volume_Anomaly', 'Bitcoin_Close',
+    'Gold_volume_rank', 'Gold_momentum', 'SP500_return', 'VNIndex_ETF_return', 'SJC_Premium_Percent',
+    'Policy_Risk_Zone', 'Shock_Index', 'Real_Yield_10Y'
 ]
 
 
-def _prepare_xgb_feature_frame(df_raw: pd.DataFrame) -> pd.DataFrame:
-    df_temp = df_raw.copy()
+def _build_runtime_scaler(frame: pd.DataFrame, feature_columns: list[str]) -> MinMaxScaler:
+    working = frame.copy()
+    for column in feature_columns:
+        if column not in working.columns:
+            working[column] = 0.0
 
-    df_temp.replace([np.inf, -np.inf], np.nan, inplace=True)
-    df_temp.ffill(inplace=True)
-    df_temp.bfill(inplace=True)
-    df_temp.fillna(0, inplace=True)
+    scaler_frame = (
+        working[feature_columns]
+        .apply(pd.to_numeric, errors='coerce')
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0.0)
+    )
 
-    df_temp['year'] = df_temp.index.year
-    df_temp['month'] = df_temp.index.month
-    df_temp['day'] = df_temp.index.day
-    df_temp['dayofweek'] = df_temp.index.dayofweek
-    df_temp['weekofyear'] = df_temp.index.isocalendar().week.astype(int)
-    df_temp['quarter'] = df_temp.index.quarter
-
-    for column in XGB_FEATURE_COLUMNS:
-        if column not in df_temp.columns:
-            df_temp[column] = 0.0
-
-    return df_temp
+    scaler = MinMaxScaler()
+    scaler.fit(scaler_frame)
+    return scaler
 
 
 # --- Patch để xử lý version mismatch khi load model .h5 ---
@@ -52,19 +56,17 @@ keras.layers.Dense.__init__ = _patched_dense_init
 
 class GoldPredictionEngine:
     def __init__(self):
+        feature_frame = load_feature_dataset_frame()
+
         # Load models & scalers từ weights/ LSTM
-        self.scaler_X = joblib.load(f"{settings.MODEL_DIR}/scaler_X_lstm_k10.pkl")
-        self.scaler_y = joblib.load(f"{settings.MODEL_DIR}/scaler_y_lstm_k10.pkl")
         self.meta = joblib.load(f"{settings.MODEL_DIR}/meta_lstm_k10.pkl")
+        diff_frame, _, _ = load_feature_prediction_data(required_columns=set(self.meta["feature_columns"]) | {"SJC"})
+        self.scaler_X = _build_runtime_scaler(diff_frame, list(self.meta["feature_columns"]))
+        self.scaler_y = _build_runtime_scaler(diff_frame[["SJC"]].copy(), ["SJC"])
         self.ml_model = keras.models.load_model(f"{settings.MODEL_DIR}/lstm_k10.keras")
         try:
             self.gru_model = keras.models.load_model(f"{settings.MODEL_DIR}/best_gru.h5", compile=False)
-            gru_frame = load_feature_dataset_frame()
-            self.gru_feature_cols = [
-                column
-                for column in gru_frame.columns
-                if column not in {"date", "SJC", "SJC_Premium_Zscore", "Policy_Risk_Zone"}
-            ]
+            self.gru_feature_cols = list(GRU_FEATURE_COLUMNS)
             expected_gru_features = int(self.gru_model.input_shape[-1]) if getattr(self.gru_model, "input_shape", None) else len(self.gru_feature_cols)
             if len(self.gru_feature_cols) != expected_gru_features:
                 print(
@@ -81,35 +83,50 @@ class GoldPredictionEngine:
         self.feature_cols = self.meta["feature_columns"]
         # 2. LOAD MODEL PHÂN LOẠI (DỰ ĐOÁN XU HƯỚNG)
         # ======================================
-        self.scaler_X_clf = joblib.load(f"{settings.MODEL_DIR}/scaler_X.pkl")
+        self.trend_model_kind = "builtin"
+        self.trend_model = None
+        self.trend_scaler = None
+        self.clf_features = list(TREND_XGB_FEATURE_COLUMNS)
+        self.clf_time_steps = 1
+        self.trend_meta = {}
 
-        # Load meta riêng cho classification
-        self.meta_clf = joblib.load(f"{settings.MODEL_DIR}/meta.pkl")
-        scaler_feature_names = getattr(self.scaler_X_clf, "feature_names_in_", None)
-        self.clf_scaler_features = list(scaler_feature_names) if scaler_feature_names is not None else list(self.meta_clf.get("features", []))
-        self.clf_features = list(self.meta_clf.get("features") or self.clf_scaler_features)
-        if self.clf_scaler_features and self.clf_features and len(self.clf_scaler_features) != len(self.clf_features):
-            print(
-                f"Warning: classification feature mismatch: scaler has {len(self.clf_scaler_features)}, model expects {len(self.clf_features)}."
+        xgb_trend_model_path = Path(settings.MODEL_DIR) / "xgb_classifier_sjc.joblib"
+        xgb_trend_meta_path = Path(settings.MODEL_DIR) / "xgb_metadata.json"
+        legacy_trend_model_path = Path(settings.MODEL_DIR) / "sjc_classification.h5"
+
+        if xgb_trend_model_path.exists():
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r".*If you are loading a serialized model.*",
+                    category=UserWarning,
+                )
+                self.trend_model = joblib.load(xgb_trend_model_path)
+            self.trend_model_kind = "xgb"
+            if xgb_trend_meta_path.exists():
+                with open(xgb_trend_meta_path, 'r', encoding='utf-8') as file_handle:
+                    self.trend_meta = json.load(file_handle)
+            feature_names_in = getattr(self.trend_model, "feature_names_in_", None)
+            if feature_names_in is not None:
+                feature_names_in = list(feature_names_in)
+            self.clf_features = list(
+                feature_names_in
+                or self.trend_meta.get("features_list")
+                or TREND_XGB_FEATURE_COLUMNS
             )
-        self.clf_time_steps = self.meta_clf["time_steps"] # Giá trị 15
-        self.dl_model_clf = tf.keras.models.load_model(
-            f"{settings.MODEL_DIR}/sjc_classification.h5", 
-            compile=False
-        )
-        try:
-            self.xgb_model = joblib.load(f"{settings.MODEL_DIR}/best_xgb_model.pkl")
-            with open(f"{settings.MODEL_DIR}/best_xgb_enhanced_params.json", 'r', encoding='utf-8') as f:
-                self.xgb_meta = json.load(f)
-            
-            # Đọc features và k riêng của XGBoost từ file JSON
-            # (Nếu JSON không có thì fallback về dùng chung với LSTM)
-            self.xgb_features = self.xgb_meta.get("feature_columns") or list(XGB_FEATURE_COLUMNS)
-            self.xgb_k = self.xgb_meta.get("best_k", self.best_k)
-            print("Loaded XGBoost model successfully.")
-        except Exception as e:
-            print(f"Warning: could not load XGBoost model: {e}")
-            self.xgb_model = None
+            self.clf_time_steps = 1
+            self.trend_scaler = _build_runtime_scaler(feature_frame, self.clf_features)
+            print("Loaded XGBoost classification model successfully.")
+        elif legacy_trend_model_path.exists():
+            self.meta_clf = joblib.load(f"{settings.MODEL_DIR}/meta.pkl")
+            self.clf_features = list(self.meta_clf.get("features") or [])
+            self.clf_time_steps = int(self.meta_clf.get("time_steps", 21))
+            self.trend_scaler = _build_runtime_scaler(feature_frame, self.clf_features)
+            self.trend_model = tf.keras.models.load_model(legacy_trend_model_path, compile=False)
+            self.trend_model_kind = "keras"
+            print("Loaded legacy Keras classification model successfully.")
+        else:
+            print("Warning: could not load classification model; fallback will be used.")
 
     def predict_future_lstm(self, df_diff, last_actual_sjc_price, days: int):
         print("Predict lstm")
@@ -158,107 +175,96 @@ class GoldPredictionEngine:
 
     def predict_trend_classification(self, df_diff):
         print("Predict classi")
+        model_kind = getattr(self, "trend_model_kind", "builtin")
+        model_features = list(getattr(self, "clf_features", []))
 
-        # Bảo hiểm: Nếu pipeline data ở ngoài lỡ quên cột nào thì điền 0
-        for col in self.clf_features: # clf_features lúc này sẽ đọc ra 22 cột
-            if col not in df_diff.columns:
-                print(f"Warning: missing column '{col}'. Filling with 0.")
-                df_diff[col] = 0.0
+        if model_kind == "xgb" and self.trend_model is not None:
+            working = df_diff.copy()
+            for col in model_features:
+                if col not in working.columns:
+                    print(f"Warning: missing column '{col}'. Filling with 0.")
+                    working[col] = 0.0
 
-        # Lấy 21 ngày gần nhất (clf_time_steps = 21) của 22 cột
-        latest_data_diff = df_diff[self.clf_features].tail(self.clf_time_steps)
-        
-        # Scale và dự đoán...
-        X_input_scaled = self.scaler_X_clf.transform(latest_data_diff)
-        X_input = X_input_scaled.reshape(1, self.clf_time_steps, len(self.clf_features))
-        
-        pred_prob = self.dl_model_clf.predict(X_input, verbose=0)
-            
-        # Xử lý output (Giả sử model của bạn xuất ra [Xác_suất_Giảm, Xác_suất_Tăng])
-        # Nếu model dùng hàm kích hoạt Sigmoid (1 node) thì pred_prob có dạng [[0.8]]
-        # Nếu dùng Softmax (2 nodes) thì có dạng [[0.2, 0.8]]
-        
-        prob = np.ravel(pred_prob)
-        
-        # Logic phân loại (tùy thuộc vào cấu trúc layer cuối của bạn)
-        # Ở đây tôi ví dụ cấu trúc phổ biến nhất: 
-        # Binary Classification (0: Giảm, 1: Tăng) hoặc Softmax index 1 là Tăng.
-        if len(prob) == 1:
-            # Dành cho Sigmoid
-            up_prob = prob[0] * 100
-            down_prob = 100 - up_prob
-        else:
-            # Dành cho Softmax
-            down_prob = prob[0] * 100
-            up_prob = prob[1] * 100
+            latest_row = (
+                working[model_features]
+                .tail(1)
+                .apply(pd.to_numeric, errors='coerce')
+                .replace([np.inf, -np.inf], np.nan)
+                .fillna(0.0)
+            )
 
-        trend_result = "Tăng" if up_prob > 50 else "Giảm"
-        confidence = max(up_prob, down_prob)
+            scaler = self.trend_scaler or _build_runtime_scaler(working, model_features)
+            X_input_scaled = scaler.transform(latest_row)
+
+            if hasattr(self.trend_model, "predict_proba"):
+                pred_prob = self.trend_model.predict_proba(X_input_scaled)
+            else:
+                pred_prob = self.trend_model.predict(X_input_scaled)
+
+            prob = np.ravel(pred_prob)
+            if len(prob) == 1:
+                up_prob = float(prob[0]) * 100.0
+                down_prob = 100.0 - up_prob
+            else:
+                down_prob = float(prob[0]) * 100.0
+                up_prob = float(prob[1]) * 100.0
+
+            trend_result = "Tăng" if up_prob > 50 else "Giảm"
+            confidence = max(up_prob, down_prob)
+
+            return {
+                "predicted_trend": trend_result,
+                "confidence_percent": round(float(confidence), 2),
+                "up_probability": round(float(up_prob), 2),
+                "down_probability": round(float(down_prob), 2),
+            }
+
+        if model_kind == "keras" and self.trend_model is not None:
+            for col in model_features:
+                if col not in df_diff.columns:
+                    print(f"Warning: missing column '{col}'. Filling with 0.")
+                    df_diff[col] = 0.0
+
+            latest_data_diff = df_diff[model_features].tail(self.clf_time_steps).copy()
+            if len(latest_data_diff) < self.clf_time_steps:
+                if latest_data_diff.empty:
+                    latest_data_diff = pd.DataFrame(
+                        np.zeros((self.clf_time_steps, len(model_features))),
+                        columns=model_features,
+                    )
+                else:
+                    pad_row = latest_data_diff.iloc[[0]].to_numpy()
+                    pad_count = self.clf_time_steps - len(latest_data_diff)
+                    padding = pd.DataFrame(np.repeat(pad_row, pad_count, axis=0), columns=model_features)
+                    latest_data_diff = pd.concat([padding, latest_data_diff.reset_index(drop=True)], ignore_index=True)
+
+            X_input_scaled = self.trend_scaler.transform(latest_data_diff)
+            X_input = X_input_scaled.reshape(1, self.clf_time_steps, len(model_features))
+            pred_prob = self.trend_model.predict(X_input, verbose=0)
+            prob = np.ravel(pred_prob)
+
+            if len(prob) == 1:
+                up_prob = float(prob[0]) * 100.0
+                down_prob = 100.0 - up_prob
+            else:
+                down_prob = float(prob[0]) * 100.0
+                up_prob = float(prob[1]) * 100.0
+
+            trend_result = "Tăng" if up_prob > 50 else "Giảm"
+            confidence = max(up_prob, down_prob)
+
+            return {
+                "predicted_trend": trend_result,
+                "confidence_percent": round(float(confidence), 2),
+                "up_probability": round(float(up_prob), 2),
+                "down_probability": round(float(down_prob), 2),
+            }
 
         return {
-            "predicted_trend": trend_result,
-            "confidence_percent": round(float(confidence), 2),
-            "up_probability": round(float(up_prob), 2),
-            "down_probability": round(float(down_prob), 2)
-        }
-
-
-    # XGBoost predict 
-    def predict_future_xgb(self, df_raw, days: int):
-        print("Predict reg using XGBoost (34 Features Model)")
-        if self.xgb_model is None:
-            return {"error": "XGBoost model is missing."}
-
-        import pandas as pd
-        import numpy as np
-        from sklearn.preprocessing import MinMaxScaler
-
-        xgb_features = list(self.xgb_features)
-        df_temp = _prepare_xgb_feature_frame(df_raw)
-
-        scaler_ml_X = MinMaxScaler()
-        scaler_ml_X.fit(df_temp[xgb_features])
-        
-        last_date = df_temp.index[-1]
-        current_row = df_temp.iloc[-1][xgb_features].copy()
-        
-        # Lấy lịch sử SJC từ mảng ĐÃ LÀM SẠCH
-        sjc_history = df_temp['SJC'].tolist() 
-        current_price = float(sjc_history[-1]) if sjc_history else 0.0
-        base_price = current_price
-        predictions = []
-        
-        for i in range(1, days + 1):
-            next_date = last_date + pd.Timedelta(days=i)
-            current_row['year'] = next_date.year
-            current_row['month'] = next_date.month
-            current_row['day'] = next_date.day
-            current_row['dayofweek'] = next_date.dayofweek
-            current_row['weekofyear'] = next_date.isocalendar().week
-            current_row['quarter'] = next_date.quarter
-            
-            current_row['SJC_lag1'] = sjc_history[-1]
-            current_row['SJC_lag7'] = sjc_history[-7] if len(sjc_history) >= 7 else sjc_history[-1]
-            current_row['SJC_ma7'] = np.mean(sjc_history[-7:]) if len(sjc_history) >= 7 else sjc_history[-1]
-            
-            X_input = pd.DataFrame([current_row], columns=xgb_features)
-            X_input_scaled = scaler_ml_X.transform(X_input)
-            predicted_delta = float(self.xgb_model.predict(X_input_scaled)[0])
-            next_price = current_price + predicted_delta
-            predictions.append(next_price)
-            
-            current_price = next_price
-            sjc_history.append(next_price)
-            
-        trend_predictions, trend_scores, trend = summarize_price_path(base_price, predictions)
-        trend_label = "tăng 📈" if trend == "up" else "giảm 📉" if trend == "down" else "đi ngang"
-        return {
-            "predictions": predictions, 
-            "base_price": base_price,
-            "trend": trend_label,
-            "trend_predictions": trend_predictions,
-            "trend_scores": trend_scores,
-            "model_used": "XGBoost 🚀"
+            "predicted_trend": "Giảm",
+            "confidence_percent": 0.0,
+            "up_probability": 0.0,
+            "down_probability": 100.0,
         }
 
 
@@ -291,27 +297,8 @@ def forecast_price_path(history_prices, days, strategy="default"):
 
 
 def classify_price_path(last_price, predicted_prices):
-    """Classify price trend using the prediction engine."""
-    # Create a simple dataframe for trend classification
-    import pandas as pd
-    # Need some historical data for classification
-    # For now, create dummy data - this might need adjustment based on actual requirements
-    dummy_history = [last_price] * 15  # Assume we need at least 15 data points
-    df = pd.DataFrame({"price": dummy_history})
-    df["date"] = pd.date_range(end=pd.Timestamp.now(), periods=len(dummy_history), freq="D")
-    
-    engine = _get_engine()
-    result = engine.predict_trend_classification(df)
-    
-    # Return format expected by prediction_service: (trend_predictions, trend_scores, trend)
-    trend = result["predicted_trend"]
-    confidence = result["confidence_percent"]
-    
-    # Create dummy trend predictions and scores based on the result
-    trend_predictions = [trend] * len(predicted_prices) if predicted_prices else [trend]
-    trend_scores = [confidence] * len(trend_predictions)
-    
-    return trend_predictions, trend_scores, trend
+    """Classify price trend from the predicted price path."""
+    return summarize_price_path(last_price, predicted_prices)
 
 
 PRICE_ARTIFACT_MODEL_CODES = {"lstm-k10-price-v1", "meta-lstm-k10-price-v1"}
@@ -373,11 +360,12 @@ def _predict_future(self, df_diff, last_actual_sjc_price, days: int):
     return {"predictions": predictions, "base_price": float(last_actual_sjc_price), "trend": trend}
 
 
-def _predict_future_gru(self, last_actual_sjc_price, days: int):
+def _predict_future_gru(self, last_actual_sjc_price, days: int, range_value: str | None = None):
     if getattr(self, "gru_model", None) is None:
-        return self.predict_future(load_feature_prediction_data(required_columns=set(self.feature_cols) | {"SJC"})[0], last_actual_sjc_price, days)
+        df_diff, _, _ = load_feature_prediction_data(required_columns=set(self.feature_cols) | {"SJC"}, range_value=range_value)
+        return self.predict_future(df_diff, last_actual_sjc_price, days)
 
-    feature_frame = load_feature_dataset_frame()
+    feature_frame = load_feature_dataset_frame(range_value=range_value)
     feature_columns = list(
         getattr(self, "gru_feature_cols", None)
         or [column for column in feature_frame.columns if column not in {"date", "SJC", "SJC_Premium_Zscore", "Policy_Risk_Zone"}]
@@ -424,8 +412,6 @@ def _predict_future_gru(self, last_actual_sjc_price, days: int):
 
 
 def _predict_trend_classification(self, df_diff):
-    from sklearn.preprocessing import MinMaxScaler
-
     model_features = list(getattr(self, "clf_features", []))
     if not model_features:
         return {
@@ -433,6 +419,45 @@ def _predict_trend_classification(self, df_diff):
             "confidence_percent": 0.0,
             "up_probability": 0.0,
             "down_probability": 100.0,
+        }
+
+    if getattr(self, "trend_model_kind", "builtin") == "xgb" and getattr(self, "trend_model", None) is not None:
+        working = df_diff.copy()
+        for column in model_features:
+            if column not in working.columns:
+                working[column] = 0.0
+
+        latest_row = (
+            working[model_features]
+            .tail(1)
+            .apply(pd.to_numeric, errors="coerce")
+            .replace([np.inf, -np.inf], np.nan)
+            .fillna(0.0)
+        )
+
+        trend_scaler = getattr(self, "trend_scaler", None) or _build_runtime_scaler(working, model_features)
+        X_input_scaled = trend_scaler.transform(latest_row)
+        if hasattr(self.trend_model, "predict_proba"):
+            pred_prob = self.trend_model.predict_proba(X_input_scaled)
+        else:
+            pred_prob = self.trend_model.predict(X_input_scaled)
+
+        prob = np.ravel(pred_prob)
+        if len(prob) == 1:
+            up_prob = float(prob[0]) * 100.0
+            down_prob = 100.0 - up_prob
+        else:
+            down_prob = float(prob[0]) * 100.0
+            up_prob = float(prob[1]) * 100.0
+
+        trend_result = "Tăng" if up_prob > 50 else "Giảm"
+        confidence = max(up_prob, down_prob)
+
+        return {
+            "predicted_trend": trend_result,
+            "confidence_percent": round(float(confidence), 2),
+            "up_probability": round(float(up_prob), 2),
+            "down_probability": round(float(down_prob), 2),
         }
 
     latest_data_diff = self._prepare_feature_window(df_diff, model_features, self.clf_time_steps)
@@ -449,7 +474,7 @@ def _predict_trend_classification(self, df_diff):
 
     X_input = X_input_scaled.reshape(1, self.clf_time_steps, len(model_features))
 
-    pred_prob = self.dl_model_clf.predict(X_input, verbose=0)
+    pred_prob = self.trend_model.predict(X_input, verbose=0)
     prob = np.ravel(pred_prob)
 
     if len(prob) == 1:
@@ -581,19 +606,57 @@ def _normalize_artifact_trend_label(label):
     return "flat"
 
 
-def forecast_price_path(history_prices, days, strategy="default", provider="builtin", model_code=None, source="sjc"):
+def _forecast_trend_bias_path(history_prices, days, direction, confidence_percent):
+    history = _coerce_history_prices(history_prices)
+    if not history or days <= 0:
+        return []
+
+    recent_window = np.asarray(history[-min(len(history), 30):], dtype=float)
+    last_price = float(recent_window[-1])
+    anchor_price = float(np.mean(recent_window)) if recent_window.size else last_price
+    if recent_window.size > 1:
+        recent_change = float(np.mean(np.diff(recent_window)))
+    else:
+        recent_change = 0.0
+
+    if not np.isfinite(recent_change) or abs(recent_change) < 1e-6:
+        recent_change = max(abs(last_price) * 0.002, 0.1)
+
+    confidence_ratio = max(0.05, min(0.95, float(confidence_percent) / 100.0))
+    base_step = max(abs(recent_change), max(abs(last_price) * 0.0015, 0.1))
+    drift = base_step * (0.65 + confidence_ratio)
+    oscillation = drift * (1.65 - confidence_ratio)
+
+    current_price = last_price
+    predicted_prices: list[float] = []
+    for index in range(days):
+        decay = 0.94 ** index
+        swing = np.sin(index + 1.0) * oscillation * (1.0 - confidence_ratio)
+        pull = (anchor_price - current_price) * 0.75
+        step = direction * drift * decay + swing + pull
+
+        current_price = max(0.01, current_price + step)
+        predicted_prices.append(float(current_price))
+
+    return predicted_prices
+
+
+def forecast_price_path(history_prices, days, strategy="default", provider="builtin", model_code=None, source="sjc", range_value: str | None = None):
     history = _coerce_history_prices(history_prices)
     if not history or days <= 0:
         return [], False
 
     if provider == "artifact" and source == "sjc" and model_code in GRU_ARTIFACT_MODEL_CODES:
         engine = _get_engine()
-        result = engine.predict_future_gru(history[-1], days)
+        result = engine.predict_future_gru(history[-1], days, range_value=range_value)
         return result["predictions"], False
 
     if provider == "artifact" and source == "sjc" and model_code in PRICE_ARTIFACT_MODEL_CODES:
         engine = _get_engine()
-        df_diff, last_actual_price, _ = load_feature_prediction_data(required_columns=set(engine.feature_cols) | {"SJC"})
+        df_diff, last_actual_price, _ = load_feature_prediction_data(
+            required_columns=set(engine.feature_cols) | {"SJC"},
+            range_value=range_value,
+        )
         result = engine.predict_future(df_diff, last_actual_price, days)
         return result["predictions"], False
 
@@ -602,18 +665,36 @@ def forecast_price_path(history_prices, days, strategy="default", provider="buil
     return predictions, used_fallback
 
 
-def predict_trend_path(history_prices, days, strategy="default", provider="builtin", model_code=None, source="sjc"):
+def predict_trend_path(history_prices, days, strategy="default", provider="builtin", model_code=None, source="sjc", range_value: str | None = None):
     history = _coerce_history_prices(history_prices)
     if not history or days <= 0:
         return [], [], False
 
     if provider == "artifact" and source == "sjc" and model_code in TREND_ARTIFACT_MODEL_CODES:
         engine = _get_engine()
-        df_diff, _, _ = load_feature_prediction_data(required_columns=set(engine.clf_features) | {"SJC"})
+        if getattr(engine, "trend_model", None) is None:
+            reference_strategy = "momentum" if (strategy or "").strip().lower() in {"", "default", "slope"} else strategy
+            predicted_prices = _forecast_builtin_price_path(history, days, strategy=reference_strategy)
+            trend_predictions, trend_scores, _ = summarize_price_path(history[-1], predicted_prices)
+            return trend_predictions, trend_scores, True
+
+        df_diff, _, _ = load_feature_prediction_data(
+            required_columns=set(engine.clf_features) | {"SJC"},
+            range_value=range_value,
+        )
         result = engine.predict_trend_classification(df_diff)
         label = _normalize_artifact_trend_label(result.get("predicted_trend"))
-        score = round(float(result.get("confidence_percent", 50.0)) / 100.0, 4)
-        return [label] * days, [score] * days, False
+        if label == "flat":
+            reference_strategy = "momentum" if (strategy or "").strip().lower() in {"", "default", "slope"} else strategy
+            predicted_prices = _forecast_builtin_price_path(history, days, strategy=reference_strategy)
+            trend_predictions, trend_scores, _ = summarize_price_path(history[-1], predicted_prices)
+            return trend_predictions, trend_scores, False
+
+        direction = 1 if label == "up" else -1
+        confidence_percent = float(result.get("confidence_percent", 50.0))
+        predicted_prices = _forecast_trend_bias_path(history, days, direction, confidence_percent)
+        trend_predictions, trend_scores, _ = summarize_price_path(history[-1], predicted_prices)
+        return trend_predictions, trend_scores, False
 
     reference_strategy = "momentum" if (strategy or "").strip().lower() in {"", "default", "slope"} else strategy
     predicted_prices = _forecast_builtin_price_path(history, days, strategy=reference_strategy)

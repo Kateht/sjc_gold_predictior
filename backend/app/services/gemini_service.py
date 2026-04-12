@@ -14,12 +14,16 @@ from app.core.config import settings
 
 IDENTITY_PATTERNS = (
     r"\bbạn là ai\b",
+    r"\bbạn tên gì\b",
+    r"\btên bạn là gì\b",
     r"\bai là\b",
     r"\bwho are you\b",
+    r"\bwhat is your name\b",
 )
 
 CAPABILITY_PATTERNS = (
     r"\bbạn có thể làm gì\b",
+    r"\bbạn làm được gì\b",
     r"\bcó thể hỗ trợ gì\b",
     r"\bwhat can you do\b",
 )
@@ -36,6 +40,8 @@ FORECAST_INTENT_KEYWORDS = (
 ALLOWED_TOPIC_KEYWORDS = (
     "giá vàng",
     "sjc",
+    "vàng",
+    "gold",
     "trend",
     "model",
     "dự báo",
@@ -46,6 +52,22 @@ ALLOWED_TOPIC_KEYWORDS = (
     "chart",
     "dashboard",
     "admin",
+)
+
+GENERAL_CHAT_PATTERNS = (
+    r"\bxin chào\b",
+    r"\bchào\b",
+    r"\bhello\b",
+    r"\bhi\b",
+    r"\bhey\b",
+    r"\bcảm ơn\b",
+    r"\bthanks\b",
+    r"\bthank you\b",
+    r"\bbạn khỏe không\b",
+    r"\bhow are you\b",
+    r"\bhôm nay thế nào\b",
+    r"\btrò chuyện\b",
+    r"\btán gẫu\b",
 )
 
 METRIC_PATTERNS = (
@@ -70,7 +92,7 @@ class GoldAIService:
         self.last_price = None
         self._dataset_loaded = False
         self._load_dataset_if_available()
-        prompt_system = """
+        gold_prompt_system = """
         Bạn là một Trợ lý AI Chuyên gia Phân tích Vàng SJC cao cấp.
         
         Quy tắc an toàn:
@@ -81,7 +103,7 @@ class GoldAIService:
         
         CÁCH LỰA CHỌN CÔNG CỤ DỰ ĐOÁN GIÁ:
         - Nếu người dùng KHÔNG chỉ định rõ, hãy dùng `predict_gold_price_lstm_tool` (LSTM Model mặc định).
-        - Nếu người dùng yêu cầu dùng "XGBoost", "Mô hình cây", hoặc "ML", hãy gọi `predict_gold_price_xgboost_tool`.
+        - Nếu người dùng yêu cầu dùng "XGBoost", "Mô hình cây", hoặc "ML", hãy chuyển sang `predict_gold_price_lstm_tool` vì model giá XGBoost đã được gỡ bỏ.
         - Nếu người dùng hỏi xu hướng, gọi `predict_gold_trend_tool`.
         
         1. NẾU BẠN SỬ DỤNG CÔNG CỤ DỰ ĐOÁN XU HƯỚNG (Classification Tool):
@@ -103,11 +125,25 @@ class GoldAIService:
 
         Khi nói về chất lượng của model hồi quy, hãy dùng cách diễn giải đời thường như "độ khớp chung", "lệch trung bình", "lệch điển hình" và "lệch theo %". Không nêu trực tiếp tên kỹ thuật của các chỉ số nếu người dùng không yêu cầu.
         """
+        general_chat_system = """
+        Bạn là một trợ lý hội thoại tự nhiên, thân thiện và hữu ích.
+
+        Quy tắc trả lời:
+        - Trả lời ngắn gọn, tự nhiên, đúng trọng tâm.
+        - Nếu người dùng nói tiếng Việt thì ưu tiên trả lời tiếng Việt.
+        - Có thể trò chuyện bình thường, chào hỏi, giải thích khái niệm, hoặc viết lại câu văn.
+        - Không tiết lộ thông tin nội bộ như khóa API, biến môi trường, đường dẫn file, mã nguồn, schema database, hay chi tiết cấu hình backend.
+        - Nếu câu hỏi liên quan đến vàng SJC, hãy trả lời ở mức tổng quan hoặc hướng người dùng sang chức năng dự báo khi cần số liệu cụ thể.
+        """
         genai.configure(api_key=settings.GEMINI_API_KEY)
         self.gemini_model = genai.GenerativeModel(
             model_name="gemini-2.5-flash-lite",
-            tools=[self.predict_gold_price_lstm_tool, self.predict_gold_trend_tool, self.predict_gold_price_xgboost_tool], # Thêm tool ở đây
-            system_instruction=prompt_system
+            tools=[self.predict_gold_price_lstm_tool, self.predict_gold_trend_tool],
+            system_instruction=gold_prompt_system
+        )
+        self.general_chat_model = genai.GenerativeModel(
+            model_name="gemini-2.5-flash-lite",
+            system_instruction=general_chat_system
         )
 
     def _load_dataset_if_available(self) -> bool:
@@ -191,6 +227,52 @@ class GoldAIService:
             f"👉 Nhận định ngắn gọn: Xu hướng hiện tại đang nghiêng về {trend_lower or 'giữ nguyên'}."
         )
 
+    def _contains_keyword(self, text: str, keyword: str) -> bool:
+        token = keyword.strip()
+        if not token:
+            return False
+        if " " in token:
+            return token in text
+        return re.search(rf"(?<!\w){re.escape(token)}(?!\w)", text) is not None
+
+    def _contains_any_keyword(self, text: str, keywords: tuple[str, ...]) -> bool:
+        return any(self._contains_keyword(text, keyword) for keyword in keywords)
+
+    def _is_gold_context_question(self, question: str) -> bool:
+        normalized = self._normalize_text(question)
+        return (
+            self._contains_any_keyword(normalized, ALLOWED_TOPIC_KEYWORDS)
+            or self._is_forecast_intent(question)
+            or self._is_model_question(question)
+            or self._is_metric_question(question)
+            or self._is_news_question(question)
+            or self._is_history_question(question)
+        )
+
+    def _is_general_chat_question(self, question: str) -> bool:
+        normalized = self._normalize_text(question)
+        return self._matches_any_pattern(normalized, GENERAL_CHAT_PATTERNS)
+
+    def _general_chat_response(self, question: str) -> str:
+        try:
+            response = self.general_chat_model.generate_content(question)
+            answer = self._sanitize_ai_text(getattr(response, "text", None))
+            if answer:
+                return answer
+        except Exception as exc:
+            print(f"❌ Lỗi general chat fallback: {exc}")
+
+        normalized = self._normalize_text(question)
+        if self._is_general_chat_question(question):
+            if any(keyword in normalized for keyword in ("cảm ơn", "thanks", "thank you")):
+                return "Không có gì, nếu cần mình hỗ trợ thêm cứ nói nhé."
+            if any(keyword in normalized for keyword in ("chào", "hello", "hi", "hey", "xin chào")):
+                return "Chào bạn, mình ở đây. Bạn muốn hỏi gì tiếp?"
+            if "bạn khỏe không" in normalized or "how are you" in normalized:
+                return "Mình ổn, cảm ơn bạn. Bạn cần mình hỗ trợ gì nào?"
+
+        return "Mình có thể trò chuyện tự nhiên hơn nếu bạn nói rõ thêm một chút."
+
     def _direct_answer_for_question(self, question: str) -> str | None:
         normalized = self._normalize_text(question)
 
@@ -230,10 +312,10 @@ class GoldAIService:
 
         if any(keyword in normalized for keyword in ("xgboost", "mô hình cây", "ml")):
             days = self._extract_days(question)
-            result = self.predict_gold_price_xgboost_tool(days)
+            result = self.predict_gold_price_lstm_tool(days)
             if result.get("error"):
                 return self._safe_dataset_error()
-            return self._format_answer(days, result, summary="Dự báo bằng XGBoost.")
+            return self._format_answer(days, result, summary="Dự báo bằng LSTM (thay thế XGBoost đã gỡ bỏ).")
 
         if any(keyword in normalized for keyword in ("xu hướng", "classification", "tăng hay giảm", "trend")):
             result = self.predict_gold_trend_tool()
@@ -252,12 +334,7 @@ class GoldAIService:
         if not self._load_dataset_if_available():
             return {"error": self._safe_dataset_error()}
         return self.engine.predict_future_lstm(self.df_diff, self.last_price, days)
-    
-    def predict_gold_price_xgboost_tool(self, days: int):
-        """Dự đoán giá vàng trong tương lai bằng XGBoost."""
-        if not self._load_dataset_if_available():
-            return {"error": self._safe_dataset_error()}
-        return self.engine.predict_future_xgb(self.df_raw, days) # Đổi thành df_raw
+
     def predict_gold_trend_tool(self):
         """Dự đoán XU HƯỚNG Tăng/Giảm của giá vàng ngày mai kèm mức độ tự tin (%)."""
         if not self._load_dataset_if_available():
@@ -296,7 +373,7 @@ class GoldAIService:
 
     def _is_forecast_intent(self, question: str) -> bool:
         normalized = self._normalize_text(question)
-        return any(keyword in normalized for keyword in FORECAST_INTENT_KEYWORDS)
+        return self._contains_any_keyword(normalized, FORECAST_INTENT_KEYWORDS)
 
     def _is_metric_question(self, question: str) -> bool:
         normalized = self._normalize_text(question)
@@ -312,7 +389,7 @@ class GoldAIService:
 
     def _is_history_question(self, question: str) -> bool:
         normalized = self._normalize_text(question)
-        return "history" in normalized or "lịch sử" in normalized or "csv" in normalized or "export" in normalized
+        return self._contains_any_keyword(normalized, ("history", "lịch sử", "csv", "export"))
 
     def _identity_answer(self) -> str:
         return (
@@ -361,12 +438,7 @@ class GoldAIService:
         )
 
     def _is_relevant_question(self, question: str) -> bool:
-        normalized = self._normalize_text(question)
-        return (
-            any(keyword in normalized for keyword in ALLOWED_TOPIC_KEYWORDS)
-            or self._is_identity_question(question)
-            or self._is_capability_question(question)
-        )
+        return self._is_gold_context_question(question) or self._is_identity_question(question) or self._is_capability_question(question)
 
     def _format_answer(self, days: int, result: dict[str, object], summary: str | None = None) -> str:
         predictions = [float(value) for value in (result.get("predictions") or [])]  # type: ignore[arg-type]
@@ -423,8 +495,10 @@ class GoldAIService:
         return "\n".join(lines)
 
     def fallback_agent(self, question: str):
+        if not self._is_gold_context_question(question):
+            return self._general_chat_response(question)
+
         days = self._extract_days(question)
-        # Sửa lỗi: Gọi đúng tên hàm predict_future_lstm
         if not self._load_dataset_if_available():
             return self._safe_dataset_error()
         result = self.engine.predict_future_lstm(self.df_diff, self.last_price, days)
@@ -454,6 +528,9 @@ class GoldAIService:
             if direct_answer is not None:
                 return direct_answer
 
+            if not self._is_gold_context_question(question):
+                return self._general_chat_response(question)
+
             response = self.gemini_model.generate_content(question)
             
             # TÌM TẤT CẢ CÁC PARTS, XEM CÓ PART NÀO GỌI TOOL KHÔNG
@@ -470,15 +547,8 @@ class GoldAIService:
                     days = int(fc.args["days"]) if "days" in fc.args else 1
                     result = self.engine.predict_future_lstm(self.df_diff, self.last_price, days)
                     return self._sanitize_ai_text(self._format_answer(days, result, summary="Dự báo bằng LSTM."))
-                
-                # 2. Nếu Gemini gọi XGBoost (Thêm nhánh bị thiếu này vào)
-                elif fc.name == "predict_gold_price_xgboost_tool":
-                    days = int(fc.args["days"]) if "days" in fc.args else 1
-                    # Truyền df_raw và KHÔNG cần truyền self.last_price
-                    result = self.engine.predict_future_xgb(self.df_raw, days)
-                    return self._sanitize_ai_text(self._format_answer(days, result, summary="Dự báo bằng XGBoost."))
 
-                # 3. Nếu Gemini gọi Tool Dự đoán Xu hướng
+                # 2. Nếu Gemini gọi Tool Dự đoán Xu hướng
                 elif fc.name == "predict_gold_trend_tool":
                     result = self.engine.predict_trend_classification(self.df_diff)
                     return self._sanitize_ai_text(self._format_trend_classification_answer(result))
@@ -488,7 +558,11 @@ class GoldAIService:
                     return f"Lỗi: Không tìm thấy chức năng {fc.name}."
 
             # Nếu Gemini chỉ trả lời text bình thường
-            return self._sanitize_ai_text(response.text) or "Mình chưa nhận được câu trả lời hợp lệ từ mô hình."
+            text_answer = self._sanitize_ai_text(response.text)
+            if text_answer:
+                return text_answer
+
+            return self._general_chat_response(question)
 
         except Exception as e:
             print(f"❌ Lỗi Gemini/Model: {e}") 

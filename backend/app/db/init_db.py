@@ -44,36 +44,13 @@ def seed_default_models(db: Session) -> None:
     try:
         price_model_metrics = get_price_model_metrics()
     except Exception as exc:
-        logger.warning("Could not compute regression metrics during seeding; using placeholders: %s", exc)
+        logger.warning("Could not compute price metrics during seeding; using placeholders: %s", exc)
         price_model_metrics = {
-            "best-xgb-price-v1": {"mae": None, "rmse": None, "mape": None, "r2": None},
             "lstm-k10-price-v1": {"mae": None, "rmse": None, "mape": None, "r2": None},
             "gru-price-v1": {"mae": None, "rmse": None, "mape": None, "r2": None},
         }
 
     default_models = [
-        {
-            "code": "best-xgb-price-v1",
-            "name": "Best XGBoost Price Model",
-            "prediction_kind": "price",
-            "provider": "artifact",
-            "artifact_path": "app/models/best_xgb_model.pkl",
-            "description": "Artifact-backed XGBoost model for price forecasting",
-            "config_json": {
-                "subsample": 0.8,
-                "reg_lambda": 5.0,
-                "reg_alpha": 0.1,
-                "n_estimators": 500,
-                "min_child_weight": 5,
-                "max_depth": 3,
-                "learning_rate": 0.05,
-                "gamma": 0,
-                "colsample_bytree": 0.8,
-            },
-            "metrics_json": dict(price_model_metrics["best-xgb-price-v1"]),
-            "is_default": True,
-            "is_active": True,
-        },
         {
             "code": "lstm-k10-price-v1",
             "name": "LSTM K10 Price Model",
@@ -83,7 +60,7 @@ def seed_default_models(db: Session) -> None:
             "description": "Sequence model trained on a 10-step lookback window",
             "config_json": {"lookback": 10},
             "metrics_json": dict(price_model_metrics["lstm-k10-price-v1"]),
-            "is_default": False,
+            "is_default": True,
             "is_active": True,
         },
         {
@@ -103,9 +80,9 @@ def seed_default_models(db: Session) -> None:
             "name": "SJC Direction Classifier",
             "prediction_kind": "trend",
             "provider": "artifact",
-            "artifact_path": "app/models/sjc_classification.h5",
-            "description": "Artifact-backed classifier for direction bias on the SJC series",
-            "config_json": {"feature_window": 10},
+            "artifact_path": "app/models/xgb_classifier_sjc.joblib",
+            "description": "Artifact-backed XGBoost classifier for direction bias on the SJC series",
+            "config_json": {"feature_window": 1, "feature_count": 13, "strategy": "xgb_classifier"},
             "metrics_json": {"accuracy": None},
             "is_default": True,
             "is_active": True,
@@ -356,10 +333,18 @@ def seed_default_dataset_sources(db: Session, admin_id: int | None = None) -> No
         },
     ]
 
-    existing_codes = {item.code for item in db.query(DatasetSource).all()}
+    default_code = next((payload["code"] for payload in sources if payload.get("is_default")), None)
+    if default_code:
+        db.query(DatasetSource).filter(DatasetSource.is_default.is_(True)).update({DatasetSource.is_default: False})
+
+    existing_sources = {item.code: item for item in db.query(DatasetSource).all()}
     for payload in sources:
-        if payload["code"] in existing_codes:
+        existing = existing_sources.get(payload["code"])
+        if existing:
+            for field_name, field_value in payload.items():
+                setattr(existing, field_name, field_value)
             continue
+
         db.add(DatasetSource(**payload, created_by_id=admin_id))
 
     db.commit()

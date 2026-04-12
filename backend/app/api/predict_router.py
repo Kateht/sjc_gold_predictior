@@ -20,7 +20,7 @@ def predict_price(
     days: int = Query(default=7, ge=1, le=365),
     model: str | None = Query(default=None, description="Model id or code"),
     source: str = Query(default="sjc", description="sjc or world"),
-    range: str | None = Query(default=None, description="Optional input range tag for logging"),
+    range: str | None = Query(default=None, description="Optional input range tag, counted backward from the current date"),
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_current_user),
 ):
@@ -33,7 +33,7 @@ def predict_trend(
     days: int = Query(default=7, ge=1, le=365),
     model: str | None = Query(default=None, description="Model id or code"),
     source: str = Query(default="sjc", description="sjc or world"),
-    range: str | None = Query(default=None, description="Optional input range tag for logging"),
+    range: str | None = Query(default=None, description="Optional input range tag, counted backward from the current date"),
     db: Session = Depends(get_db),
     current_user=Depends(get_optional_current_user),
 ):

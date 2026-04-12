@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.ai.engine import classify_price_path, forecast_price_path, predict_trend_path
-from app.ai.utils import build_future_dates
+from app.ai.utils import build_future_dates, limit_history_frame
 from app.db.models import PredictionRecord, User
 from app.schemas.models import ModelRead, PredictionKind
 from app.schemas.prediction import PricePredictionResponse, TrendPredictionResponse
@@ -120,6 +120,7 @@ class PredictionService:
 
     def predict_price(self, *, days: int, model_identifier: str | None = None, source: str = "sjc", range_value: str | None = None) -> PricePredictionResponse:
         history_frame, normalized_source = load_history_for_source(source)
+        history_frame = limit_history_frame(history_frame, range_value)
         selected_model, selected_model_read = self._resolve_model_or_fallback(model_identifier, PredictionKind.price)
         strategy = self._model_strategy(selected_model)
         history_prices = history_frame["price"].tolist()
@@ -130,6 +131,7 @@ class PredictionService:
             provider=selected_model.provider,
             model_code=selected_model.code,
             source=normalized_source,
+            range_value=range_value,
         )
         trend_predictions, trend_scores, trend = classify_price_path(history_prices[-1], predictions)
         future_dates = build_future_dates(history_frame["date"].iloc[-1], days)
@@ -165,6 +167,7 @@ class PredictionService:
 
     def predict_trend(self, *, days: int, model_identifier: str | None = None, source: str = "sjc", range_value: str | None = None) -> TrendPredictionResponse:
         history_frame, normalized_source = load_history_for_source(source)
+        history_frame = limit_history_frame(history_frame, range_value)
         selected_model, selected_model_read = self._resolve_model_or_fallback(model_identifier, PredictionKind.trend)
         strategy = self._model_strategy(selected_model)
         history_prices = history_frame["price"].tolist()
@@ -175,6 +178,7 @@ class PredictionService:
             provider=selected_model.provider,
             model_code=selected_model.code,
             source=normalized_source,
+            range_value=range_value,
         )
         future_dates = build_future_dates(history_frame["date"].iloc[-1], days)
 

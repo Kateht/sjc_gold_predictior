@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, mean_squared_error, r2_score
 
-from app.ai.engine import XGB_FEATURE_COLUMNS, _get_engine, _prepare_xgb_feature_frame
+from app.ai.engine import _get_engine
 from app.ai.utils import load_and_preprocess_data_for_gemini, load_feature_dataset_frame
 from app.core.config import settings
 
@@ -21,7 +21,6 @@ DEFAULT_REGRESSION_METRICS: dict[str, float | None] = {
 }
 
 PRICE_MODEL_CODES = (
-    "best-xgb-price-v1",
     "lstm-k10-price-v1",
     "gru-price-v1",
 )
@@ -136,57 +135,21 @@ def _evaluate_gru_metrics(engine, feature_frame: pd.DataFrame, holdout_days: int
             if column not in current_row.index:
                 current_row[column] = 0.0
 
-        input_values = (
-            pd.to_numeric(current_row[feature_columns], errors="coerce")
-            .replace([np.inf, -np.inf], np.nan)
-            .fillna(0.0)
-            .to_numpy(dtype=float)
-            .reshape(1, 1, len(feature_columns))
-        )
+        try:
+            input_values = (
+                pd.to_numeric(current_row[feature_columns], errors="coerce")
+                .replace([np.inf, -np.inf], np.nan)
+                .fillna(0.0)
+                .to_numpy(dtype=float)
+                .reshape(1, 1, len(feature_columns))
+            )
 
-        predicted_delta = float(np.ravel(gru_model.predict(input_values, verbose=0))[0])
-        current_price = float(working["SJC"].iloc[cutoff_index])
-        actual_price = float(working["SJC"].iloc[cutoff_index + 1])
-
-        actual_values.append(actual_price)
-        predicted_values.append(current_price + predicted_delta)
-
-    return _build_metric_payload(actual_values, predicted_values)
-
-
-def _evaluate_xgb_metrics(engine, raw_frame: pd.DataFrame, holdout_days: int) -> dict[str, float | None]:
-    xgb_model = getattr(engine, "xgb_model", None)
-    feature_columns = list(getattr(engine, "xgb_features", None) or XGB_FEATURE_COLUMNS)
-    if xgb_model is None:
-        return _clone_default_metrics()
-
-    prepared_frame = _prepare_xgb_feature_frame(raw_frame)
-    total_rows = len(prepared_frame)
-    start_index = max(7, total_rows - holdout_days - 1)
-    if start_index >= total_rows - 1:
-        return _clone_default_metrics()
-
-    scaler = None
-    try:
-        from sklearn.preprocessing import MinMaxScaler
-
-        scaler = MinMaxScaler()
-        scaler.fit(prepared_frame[feature_columns])
-    except Exception as exc:
-        logger.warning("Could not fit the XGBoost scaler for metrics: %s", exc)
-        return _clone_default_metrics()
-
-    actual_values: list[float] = []
-    predicted_values: list[float] = []
-
-    for cutoff_index in range(start_index, total_rows - 1):
-        current_row = prepared_frame.iloc[cutoff_index][feature_columns].copy()
-        input_frame = pd.DataFrame([current_row], columns=feature_columns)
-        input_scaled = scaler.transform(input_frame)
-
-        predicted_delta = float(xgb_model.predict(input_scaled)[0])
-        current_price = float(prepared_frame["SJC"].iloc[cutoff_index])
-        actual_price = float(prepared_frame["SJC"].iloc[cutoff_index + 1])
+            predicted_delta = float(np.ravel(gru_model.predict(input_values, verbose=0))[0])
+            current_price = float(working["SJC"].iloc[cutoff_index])
+            actual_price = float(working["SJC"].iloc[cutoff_index + 1])
+        except Exception as exc:
+            logger.warning("Skipping GRU metric row %s due to prediction error: %s", cutoff_index, exc)
+            continue
 
         actual_values.append(actual_price)
         predicted_values.append(current_price + predicted_delta)
@@ -203,11 +166,6 @@ def get_price_model_metrics(holdout_days: int | None = None) -> dict[str, dict[s
     metrics_by_model: dict[str, dict[str, float | None]] = {}
     for code in PRICE_MODEL_CODES:
         metrics_by_model[code] = _clone_default_metrics()
-
-    try:
-        metrics_by_model["best-xgb-price-v1"] = _evaluate_xgb_metrics(engine, raw_frame, resolved_holdout_days)
-    except Exception as exc:
-        logger.warning("Failed to compute XGBoost regression metrics: %s", exc)
 
     try:
         metrics_by_model["lstm-k10-price-v1"] = _evaluate_lstm_metrics(engine, raw_frame, diff_frame, resolved_holdout_days)
