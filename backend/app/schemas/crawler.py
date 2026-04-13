@@ -14,6 +14,7 @@ class CrawlerTask(str, Enum):
     pipeline = "pipeline"
     report = "report"
     final_uso = "final-uso"
+    final_dataset = "final-dataset"
 
 
 class CrawlerStatus(str, Enum):

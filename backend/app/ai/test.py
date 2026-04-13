@@ -1,7 +1,7 @@
 import pandas as pd
 
 # 1. Đọc file CSV y hệt như trên Colab
-df = pd.read_csv('dataset/final_dataset_new.csv', index_col=0, parse_dates=True)
+df = pd.read_csv('dataset/final_dataset.csv', index_col=0, parse_dates=True)
 
 # 2. Tạo 6 biến thời gian giống hệt Colab
 df["year"] = df.index.year

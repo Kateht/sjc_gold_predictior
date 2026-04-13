@@ -226,7 +226,12 @@ def download_stooq(symbol: str, *, max_age_hours: float = 24.0) -> str:
 
     if need:
         text = _fetch_text(_stooq_url(symbol), timeout=(5, 60), retries=3, backoff=1.0)
-        if text.strip().startswith("No data") or len(text.splitlines()) < 2:
+        if (
+            text.strip().startswith("No data")
+            or len(text.splitlines()) < 2
+            or "Get your apikey" in text
+            or "apikey" in text.lower()
+        ):
             # Keep a small marker file to avoid hammering.
             with open(path, "w", encoding="utf-8", newline="") as f:
                 f.write("No data")
@@ -242,7 +247,15 @@ def load_stooq_df(symbol: str) -> pd.DataFrame:
         if f.read(20).strip().startswith("No data"):
             return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])  # empty
 
-    df = pd.read_csv(path)
+    try:
+        df = pd.read_csv(path)
+    except Exception:
+        with open(path, "r", encoding="utf-8", newline="") as f:
+            head = f.read(256)
+        if "Get your apikey" in head or "apikey" in head.lower():
+            return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])  # empty
+        raise
+
     if df.empty:
         return pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"])  # empty
 
@@ -448,8 +461,17 @@ def _fill_only_missing(existing: pd.DataFrame, new: pd.DataFrame) -> pd.DataFram
 
 
 def update_csv(start: date, end: date, *, output_path: str = OUTPUT_CSV_PATH) -> None:
-    new = build_dataset(start, end)
     existing = _load_existing(output_path)
+    try:
+        new = build_dataset(start, end)
+    except Exception as exc:
+        if not existing.empty:
+            existing.to_csv(output_path, index=False, quoting=csv.QUOTE_MINIMAL)
+            print(f"Legacy USO rebuild unavailable; kept existing file: {output_path}")
+            print(f"Reason: {exc}")
+            return
+        raise
+
     merged = _fill_only_missing(existing, new)
 
     # Write CSV

@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.ai.metrics import get_price_model_metrics
 from app.core.config import settings
 from app.core.security import hash_password
 from app.db.models import DatasetSource, GoldSourceLink, MLModel, NewsArticle, NewsCategory, User
+
+
+logger = logging.getLogger(__name__)
 
 
 def seed_default_admin(db: Session) -> None:
@@ -36,6 +41,16 @@ def seed_default_admin(db: Session) -> None:
 
 
 def seed_default_models(db: Session) -> None:
+    try:
+        price_model_metrics = get_price_model_metrics()
+    except Exception as exc:
+        logger.warning("Could not compute regression metrics during seeding; using placeholders: %s", exc)
+        price_model_metrics = {
+            "best-xgb-price-v1": {"mae": None, "rmse": None, "mape": None, "r2": None},
+            "lstm-k10-price-v1": {"mae": None, "rmse": None, "mape": None, "r2": None},
+            "gru-price-v1": {"mae": None, "rmse": None, "mape": None, "r2": None},
+        }
+
     default_models = [
         {
             "code": "best-xgb-price-v1",
@@ -55,7 +70,7 @@ def seed_default_models(db: Session) -> None:
                 "gamma": 0,
                 "colsample_bytree": 0.8,
             },
-            "metrics_json": {"mae": None, "rmse": None},
+            "metrics_json": dict(price_model_metrics["best-xgb-price-v1"]),
             "is_default": True,
             "is_active": True,
         },
@@ -67,7 +82,19 @@ def seed_default_models(db: Session) -> None:
             "artifact_path": "app/models/lstm_k10.keras",
             "description": "Sequence model trained on a 10-step lookback window",
             "config_json": {"lookback": 10},
-            "metrics_json": {"mae": None, "rmse": None},
+            "metrics_json": dict(price_model_metrics["lstm-k10-price-v1"]),
+            "is_default": False,
+            "is_active": True,
+        },
+        {
+            "code": "gru-price-v1",
+            "name": "Best GRU Price Model",
+            "prediction_kind": "price",
+            "provider": "artifact",
+            "artifact_path": "app/models/best_gru.h5",
+            "description": "Artifact-backed GRU model for price forecasting",
+            "config_json": {"strategy": "gru", "feature_count": 28, "lookback": 1},
+            "metrics_json": dict(price_model_metrics["gru-price-v1"]),
             "is_default": False,
             "is_active": True,
         },

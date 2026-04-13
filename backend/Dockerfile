@@ -10,6 +10,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt /app/requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && pip install --prefer-binary -r /app/requirements.txt
@@ -22,7 +26,7 @@ COPY --chown=app:app app /app/app
 COPY --chown=app:app dataset /app/dataset
 COPY --chown=app:app entrypoint.sh /app/entrypoint.sh
 
-RUN chmod +x /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 USER app
 

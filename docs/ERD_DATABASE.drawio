@@ -1,0 +1,140 @@
+<mxfile host="app.diagrams.net" modified="2026-04-10T00:00:00.000Z" agent="codex" version="24.7.8">
+  <diagram id="erd-database" name="ERD Database">
+    <mxGraphModel dx="1450" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1450" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Background -->
+        <mxCell id="bg" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="1450" height="900" as="geometry" />
+        </mxCell>
+
+        <!-- Title -->
+        <mxCell id="title" value="ERD CƠ SỞ DỮ LIỆU (GOLD PREDICTION SYSTEM)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=0;fontStyle=1;fontSize=20;fontColor=#0F172A;" vertex="1" parent="1">
+          <mxGeometry x="60" y="20" width="1330" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Nguồn: backend/alembic/versions/20260404_0001_initial_schema.py" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=0;fontSize=12;fontColor=#64748B;" vertex="1" parent="1">
+          <mxGeometry x="60" y="55" width="1330" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Common styles -->
+        <!-- Each table is a swimlane with a dark header (report-friendly). -->
+
+        <!-- Left column -->
+        <mxCell id="t_refresh" value="refresh_tokens" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#0F172A;swimlaneFillColor=#0B1220;fontColor=#FFFFFF;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="50" y="110" width="320" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="t_refresh_fields" value="PK id (int)&#xa;FK user_id → users.id&#xa;token_jti (varchar, unique)&#xa;token_hash (varchar)&#xa;expires_at (timestamptz)&#xa;revoked_at (timestamptz, null)&#xa;created_at (timestamptz)" style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#111827;" vertex="1" parent="t_refresh">
+          <mxGeometry x="0" y="28" width="320" height="182" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_prices" value="price_history_points" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#0F172A;swimlaneFillColor=#0B1220;fontColor=#FFFFFF;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="50" y="350" width="320" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="t_prices_fields" value="PK id (int)&#xa;series_key (varchar)&#xa;series_name (varchar)&#xa;symbol (varchar, null)&#xa;observed_at (timestamptz)&#xa;price (float)&#xa;source (varchar)&#xa;raw_json (json, null)&#xa;created_at (timestamptz)&#xa;UNIQUE(series_key, observed_at)" style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#111827;" vertex="1" parent="t_prices">
+          <mxGeometry x="0" y="28" width="320" height="212" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_sources" value="gold_source_links" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#0F172A;swimlaneFillColor=#0B1220;fontColor=#FFFFFF;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="110" width="320" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="t_sources_fields" value="PK id (int)&#xa;code (varchar, unique)&#xa;name (varchar)&#xa;source_url (varchar)&#xa;source_type (varchar)&#xa;description (text, null)&#xa;region (varchar, null)&#xa;sort_order (int)&#xa;is_active (bool)&#xa;FK created_by_id → users.id (null)&#xa;created_at (timestamptz)&#xa;updated_at (timestamptz)" style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#111827;" vertex="1" parent="t_sources">
+          <mxGeometry x="0" y="28" width="320" height="212" as="geometry" />
+        </mxCell>
+
+        <!-- Center column -->
+        <mxCell id="t_users" value="users" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#0F172A;swimlaneFillColor=#0B1220;fontColor=#FFFFFF;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="390" y="110" width="320" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="t_users_fields" value="PK id (int)&#xa;name (varchar)&#xa;email (varchar, unique)&#xa;hashed_password (varchar)&#xa;role (varchar)&#xa;is_active (bool)&#xa;created_at (timestamptz)&#xa;updated_at (timestamptz)" style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#111827;" vertex="1" parent="t_users">
+          <mxGeometry x="0" y="28" width="320" height="212" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_news_cat" value="news_categories" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#0F172A;swimlaneFillColor=#0B1220;fontColor=#FFFFFF;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="390" y="380" width="320" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="t_news_cat_fields" value="PK id (int)&#xa;slug (varchar, unique)&#xa;name (varchar)&#xa;description (text, null)&#xa;sort_order (int)&#xa;is_active (bool)&#xa;FK created_by_id → users.id (null)&#xa;created_at (timestamptz)&#xa;updated_at (timestamptz)" style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#111827;" vertex="1" parent="t_news_cat">
+          <mxGeometry x="0" y="28" width="320" height="172" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_news_art" value="news_articles" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#0F172A;swimlaneFillColor=#0B1220;fontColor=#FFFFFF;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="390" y="610" width="320" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="t_news_art_fields" value="PK id (int)&#xa;FK category_id → news_categories.id (null)&#xa;slug (varchar, unique)&#xa;title (varchar)&#xa;summary (text, null)&#xa;content (text, null)&#xa;source_name (varchar, null)&#xa;source_url (varchar, null)&#xa;image_url (varchar, null)&#xa;published_at (timestamptz, null)&#xa;is_featured (bool)&#xa;is_active (bool)&#xa;FK created_by_id → users.id (null)&#xa;created_at (timestamptz)&#xa;updated_at (timestamptz)" style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#111827;" vertex="1" parent="t_news_art">
+          <mxGeometry x="0" y="28" width="320" height="232" as="geometry" />
+        </mxCell>
+
+        <!-- Right column -->
+        <mxCell id="t_models" value="ml_models" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#0F172A;swimlaneFillColor=#0B1220;fontColor=#FFFFFF;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="730" y="110" width="320" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="t_models_fields" value="PK id (int)&#xa;code (varchar, unique)&#xa;name (varchar)&#xa;prediction_kind (varchar)&#xa;provider (varchar)&#xa;artifact_path (varchar, null)&#xa;description (text, null)&#xa;config_json (json, null)&#xa;metrics_json (json, null)&#xa;is_active (bool)&#xa;is_default (bool)&#xa;FK created_by_id → users.id (null)&#xa;created_at (timestamptz)&#xa;updated_at (timestamptz)" style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#111827;" vertex="1" parent="t_models">
+          <mxGeometry x="0" y="28" width="320" height="232" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_preds" value="prediction_records" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#0F172A;swimlaneFillColor=#0B1220;fontColor=#FFFFFF;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="730" y="400" width="320" height="240" as="geometry" />
+        </mxCell>
+        <mxCell id="t_preds_fields" value="PK id (int)&#xa;FK user_id → users.id (null)&#xa;FK model_id → ml_models.id (null)&#xa;prediction_kind (varchar)&#xa;source (varchar)&#xa;input_range (varchar, null)&#xa;days (int)&#xa;selected_model_key (varchar, null)&#xa;forecast_json (json)&#xa;trend_label (varchar, null)&#xa;used_fallback (bool)&#xa;created_at (timestamptz)" style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#111827;" vertex="1" parent="t_preds">
+          <mxGeometry x="0" y="28" width="320" height="212" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_crawler" value="crawler_runs" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#0F172A;swimlaneFillColor=#0B1220;fontColor=#FFFFFF;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="730" y="670" width="320" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="t_crawler_fields" value="PK id (int)&#xa;task (varchar)&#xa;status (varchar)&#xa;trigger_source (varchar)&#xa;params_json (json, null)&#xa;exit_code (int, null)&#xa;output_text (text, null)&#xa;error_text (text, null)&#xa;log_path (varchar, null)&#xa;started_at (timestamptz, null)&#xa;finished_at (timestamptz, null)&#xa;FK created_by_id → users.id (null)&#xa;created_at (timestamptz)&#xa;updated_at (timestamptz)" style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#111827;" vertex="1" parent="t_crawler">
+          <mxGeometry x="0" y="28" width="320" height="192" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t_datasets2" value="dataset_sources" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#0F172A;swimlaneFillColor=#0B1220;fontColor=#FFFFFF;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="50" y="610" width="320" height="260" as="geometry" />
+        </mxCell>
+        <mxCell id="t_datasets_fields" value="PK id (int)&#xa;code (varchar, unique)&#xa;name (varchar)&#xa;source_type (varchar)&#xa;csv_path (varchar)&#xa;source_url (varchar, null)&#xa;file_format (varchar)&#xa;description (text, null)&#xa;is_active (bool)&#xa;is_default (bool)&#xa;last_synced_at (timestamptz, null)&#xa;FK created_by_id → users.id (null)&#xa;created_at (timestamptz)&#xa;updated_at (timestamptz)" style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#111827;" vertex="1" parent="t_datasets2">
+          <mxGeometry x="0" y="28" width="320" height="232" as="geometry" />
+        </mxCell>
+
+        <!-- Relationships (edges) -->
+        <mxCell id="r_users_refresh" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="t_users" target="t_refresh">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_users_models" value="1:N (created_by)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="t_users" target="t_models">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_users_preds" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="t_users" target="t_preds">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_models_preds" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="t_models" target="t_preds">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_users_news_cat" value="1:N (created_by)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="t_users" target="t_news_cat">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_users_news_art" value="1:N (created_by)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="t_users" target="t_news_art">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_cat_articles" value="1:N" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="t_news_cat" target="t_news_art">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_users_sources" value="1:N (created_by)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="t_users" target="t_sources">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_users_datasets" value="1:N (created_by)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="t_users" target="t_datasets2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="r_users_crawler" value="1:N (created_by)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="t_users" target="t_crawler">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="Chú giải&#xa;PK: Khóa chính, FK: Khóa ngoại&#xa;1:N: Quan hệ một - nhiều&#xa;(null): Cột cho phép rỗng" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#CBD5E1;swimlaneFillColor=#F1F5F9;fontColor=#0F172A;spacingLeft=10;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="380" width="320" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="legend_body" value="Dùng để đọc nhanh ERD trong báo cáo." style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#64748B;" vertex="1" parent="legend">
+          <mxGeometry x="0" y="28" width="320" height="112" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,144 @@
+
+--- 2026-04-11T08:51:18 ---
+Run started: 2026-04-11T08:51:18
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260411.log
+Missing-column log: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\final_dataset_missing_columns.log
+Strict build produced no rows; preserved existing file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\dataset\final_dataset.csv
+Built final_dataset.csv: 01/04/2026 -> 10/04/2026
+final_dataset: rows=3, range=2026-04-08 -> 2026-04-10
+final_dataset: missing% by column
+  - SJC: 0.000%
+  - Interest: 0.000%
+  - CPI: 0.000%
+  - Real_Yield_10Y: 0.000%
+  - Gold_Close: 0.000%
+  - Gold_High: 0.000%
+  - Gold_Low: 0.000%
+  - Gold_Volume: 0.000%
+  - USD_index_Close: 0.000%
+  - Oil_Close: 0.000%
+  - USD_VND_Close: 0.000%
+  - GVZ_Close: 0.000%
+  - VIX_Close: 0.000%
+  - ETF_Holdings_Close: 0.000%
+  - MOVE_Index_Close: 0.000%
+  - SP500_Close: 0.000%
+  - VNIndex_ETF_Close: 0.000%
+  - Bitcoin_Close: 0.000%
+  - Gold_world_vnd: 0.000%
+  - SJC_Premium: 0.000%
+  - SJC_Premium_Percent: 0.000%
+  - Shock_Index: 0.000%
+  - Gold_SP500_Ratio: 0.000%
+  - SJC_Premium_Zscore: 0.000%
+  - Policy_Risk_Zone: 0.000%
+  - SJC_lag1: 0.000%
+  - SJC_lag7: 0.000%
+  - SJC_ma7: 0.000%
+  - Gold_return: 0.000%
+  - Gold_volume_rank: 0.000%
+  - Gold_range: 0.000%
+  - Gold_volatility_7: 0.000%
+  - Gold_momentum: 0.000%
+  - Gold_Volume_Anomaly: 0.000%
+  - PVT: 0.000%
+  - SP500_return: 0.000%
+  - VNIndex_ETF_return: 0.000%
+  - Bitcoin_return: 0.000%
+
+--- 2026-04-11T08:59:20 ---
+Run started: 2026-04-11T08:59:20
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260411.log
+Missing-column log: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\final_dataset_missing_columns.log
+Strict build produced no rows; preserved existing file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\dataset\final_dataset.csv
+Built final_dataset.csv: 01/04/2026 -> 10/04/2026
+final_dataset: rows=3, range=2026-04-08 -> 2026-04-10
+final_dataset: missing% by column
+  - SJC: 0.000%
+  - Interest: 0.000%
+  - CPI: 0.000%
+  - Real_Yield_10Y: 0.000%
+  - Gold_Close: 0.000%
+  - Gold_High: 0.000%
+  - Gold_Low: 0.000%
+  - Gold_Volume: 0.000%
+  - USD_index_Close: 0.000%
+  - Oil_Close: 0.000%
+  - USD_VND_Close: 0.000%
+  - GVZ_Close: 0.000%
+  - VIX_Close: 0.000%
+  - ETF_Holdings_Close: 0.000%
+  - MOVE_Index_Close: 0.000%
+  - SP500_Close: 0.000%
+  - VNIndex_ETF_Close: 0.000%
+  - Bitcoin_Close: 0.000%
+  - Gold_world_vnd: 0.000%
+  - SJC_Premium: 0.000%
+  - SJC_Premium_Percent: 0.000%
+  - Shock_Index: 0.000%
+  - Gold_SP500_Ratio: 0.000%
+  - SJC_Premium_Zscore: 0.000%
+  - Policy_Risk_Zone: 0.000%
+  - SJC_lag1: 0.000%
+  - SJC_lag7: 0.000%
+  - SJC_ma7: 0.000%
+  - Gold_return: 0.000%
+  - Gold_volume_rank: 0.000%
+  - Gold_range: 0.000%
+  - Gold_volatility_7: 0.000%
+  - Gold_momentum: 0.000%
+  - Gold_Volume_Anomaly: 0.000%
+  - PVT: 0.000%
+  - SP500_return: 0.000%
+  - VNIndex_ETF_return: 0.000%
+  - Bitcoin_return: 0.000%
+
+--- 2026-04-11T09:01:10 ---
+Run started: 2026-04-11T09:01:10
+Config file: e:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\gold_cli.json
+Log file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\run_20260411.log
+Missing-column log: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\app\crawler\GetVietNameseGoldPrice\logs\final_dataset_missing_columns.log
+Strict build produced no rows; preserved existing file: E:\CTU IN SCHOOL\4.Year_4.Semester25-26\Semester 2\CT227H May hoc Ung dung\ThucHanh\Group Project\sjc_gold_predictior\backend\dataset\final_dataset.csv
+Built final_dataset.csv: 01/04/2026 -> 10/04/2026
+final_dataset: rows=3, range=2026-04-08 -> 2026-04-10
+final_dataset: missing% by column
+  - SJC: 0.000%
+  - Interest: 0.000%
+  - CPI: 0.000%
+  - Real_Yield_10Y: 0.000%
+  - Gold_Close: 0.000%
+  - Gold_High: 0.000%
+  - Gold_Low: 0.000%
+  - Gold_Volume: 0.000%
+  - USD_index_Close: 0.000%
+  - Oil_Close: 0.000%
+  - USD_VND_Close: 0.000%
+  - GVZ_Close: 0.000%
+  - VIX_Close: 0.000%
+  - ETF_Holdings_Close: 0.000%
+  - MOVE_Index_Close: 0.000%
+  - SP500_Close: 0.000%
+  - VNIndex_ETF_Close: 0.000%
+  - Bitcoin_Close: 0.000%
+  - Gold_world_vnd: 0.000%
+  - SJC_Premium: 0.000%
+  - SJC_Premium_Percent: 0.000%
+  - Shock_Index: 0.000%
+  - Gold_SP500_Ratio: 0.000%
+  - SJC_Premium_Zscore: 0.000%
+  - Policy_Risk_Zone: 0.000%
+  - SJC_lag1: 0.000%
+  - SJC_lag7: 0.000%
+  - SJC_ma7: 0.000%
+  - Gold_return: 0.000%
+  - Gold_volume_rank: 0.000%
+  - Gold_range: 0.000%
+  - Gold_volatility_7: 0.000%
+  - Gold_momentum: 0.000%
+  - Gold_Volume_Anomaly: 0.000%
+  - PVT: 0.000%
+  - SP500_return: 0.000%
+  - VNIndex_ETF_return: 0.000%
+  - Bitcoin_return: 0.000%

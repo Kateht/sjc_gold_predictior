@@ -86,11 +86,14 @@ class PriceHistoryPoint(Base):
     series_key = Column(String(50), nullable=False, index=True)
     series_name = Column(String(120), nullable=False)
     symbol = Column(String(50), nullable=True)
+    gold_source_link_id = Column(Integer, ForeignKey("gold_source_links.id"), nullable=False, index=True)
     observed_at = Column(DateTime(timezone=True), nullable=False, index=True)
     price = Column(Float, nullable=False)
     source = Column(String(120), nullable=False)
     raw_json = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    gold_source_link = relationship("GoldSourceLink", back_populates="price_history_points")
 
     __table_args__ = (UniqueConstraint("series_key", "observed_at", name="uq_series_key_observed_at"),)
 
@@ -151,6 +154,7 @@ class GoldSourceLink(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
+    price_history_points = relationship("PriceHistoryPoint", back_populates="gold_source_link")
     created_by = relationship("User")
 
 

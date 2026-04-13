@@ -1,4 +1,4 @@
-from app.ai.utils import load_feature_prediction_data
+from app.ai.utils import load_feature_dataset_frame, load_feature_prediction_data
 from app.core.config import settings
 import tensorflow as tf
 import keras
@@ -6,6 +6,40 @@ import numpy as np
 import pandas as pd
 import joblib
 import json
+
+
+XGB_FEATURE_COLUMNS = [
+    'Interest', 'CPI', 'Real_Yield_10Y', 'Gold_Close', 'Gold_High', 'Gold_Low', 'Gold_Volume',
+    'USD_index_Close', 'Oil_Close', 'USD_VND_Close', 'GVZ_Close', 'VIX_Close', 'ETF_Holdings_Close',
+    'MOVE_Index_Close', 'Gold_world_vnd', 'SJC_Premium', 'SJC_Premium_Percent', 'Shock_Index',
+    'SJC_lag1', 'SJC_lag7', 'SJC_ma7', 'Gold_return', 'Gold_volume_rank', 'Gold_range',
+    'Gold_volatility_7', 'Gold_momentum', 'Gold_Volume_Anomaly', 'PVT', 'year', 'month', 'day',
+    'dayofweek', 'weekofyear', 'quarter'
+]
+
+
+def _prepare_xgb_feature_frame(df_raw: pd.DataFrame) -> pd.DataFrame:
+    df_temp = df_raw.copy()
+
+    df_temp.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df_temp.ffill(inplace=True)
+    df_temp.bfill(inplace=True)
+    df_temp.fillna(0, inplace=True)
+
+    df_temp['year'] = df_temp.index.year
+    df_temp['month'] = df_temp.index.month
+    df_temp['day'] = df_temp.index.day
+    df_temp['dayofweek'] = df_temp.index.dayofweek
+    df_temp['weekofyear'] = df_temp.index.isocalendar().week.astype(int)
+    df_temp['quarter'] = df_temp.index.quarter
+
+    for column in XGB_FEATURE_COLUMNS:
+        if column not in df_temp.columns:
+            df_temp[column] = 0.0
+
+    return df_temp
+
+
 # --- Patch để xử lý version mismatch khi load model .h5 ---
 _original_dense_init = keras.layers.Dense.__init__
 
@@ -19,26 +53,60 @@ keras.layers.Dense.__init__ = _patched_dense_init
 class GoldPredictionEngine:
     def __init__(self):
         # Load models & scalers từ weights/ LSTM
-        self.scaler_X = joblib.load(f"{settings.MODEL_DIR}/scaler_X_lstm_v5.pkl")
-        self.scaler_y = joblib.load(f"{settings.MODEL_DIR}/scaler_y_lstm_v5.pkl")
-        self.meta = joblib.load(f"{settings.MODEL_DIR}/meta_lstm_v5.pkl")
-        self.ml_model = keras.models.load_model(f"{settings.MODEL_DIR}/lstm_v5.keras")
+        self.scaler_X = joblib.load(f"{settings.MODEL_DIR}/scaler_X_lstm_k10.pkl")
+        self.scaler_y = joblib.load(f"{settings.MODEL_DIR}/scaler_y_lstm_k10.pkl")
+        self.meta = joblib.load(f"{settings.MODEL_DIR}/meta_lstm_k10.pkl")
+        self.ml_model = keras.models.load_model(f"{settings.MODEL_DIR}/lstm_k10.keras")
+        try:
+            self.gru_model = keras.models.load_model(f"{settings.MODEL_DIR}/best_gru.h5", compile=False)
+            gru_frame = load_feature_dataset_frame()
+            self.gru_feature_cols = [
+                column
+                for column in gru_frame.columns
+                if column not in {"date", "SJC", "SJC_Premium_Zscore", "Policy_Risk_Zone"}
+            ]
+            expected_gru_features = int(self.gru_model.input_shape[-1]) if getattr(self.gru_model, "input_shape", None) else len(self.gru_feature_cols)
+            if len(self.gru_feature_cols) != expected_gru_features:
+                print(
+                    f"Warning: GRU feature count mismatch: expected {expected_gru_features}, got {len(self.gru_feature_cols)}."
+                )
+            else:
+                print("Loaded GRU model successfully.")
+        except Exception as e:
+            print(f"Warning: could not load GRU model: {e}")
+            self.gru_model = None
+            self.gru_feature_cols = []
         
         self.best_k = self.meta["best_k"]
         self.feature_cols = self.meta["feature_columns"]
         # 2. LOAD MODEL PHÂN LOẠI (DỰ ĐOÁN XU HƯỚNG)
         # ======================================
-        self.scaler_X_clf = joblib.load(f"{settings.MODEL_DIR}/scaler_X_classification.pkl")
+        self.scaler_X_clf = joblib.load(f"{settings.MODEL_DIR}/scaler_X.pkl")
 
         # Load meta riêng cho classification
         self.meta_clf = joblib.load(f"{settings.MODEL_DIR}/meta_sjc_classification.pkl")
         scaler_feature_names = getattr(self.scaler_X_clf, "feature_names_in_", None)
-        self.clf_features = list(scaler_feature_names) if scaler_feature_names is not None else self.meta_clf["features"]
+        self.clf_scaler_features = list(scaler_feature_names) if scaler_feature_names is not None else list(self.meta_clf.get("features", []))
+        self.clf_features = list(self.meta_clf.get("features") or self.clf_scaler_features)
+        if self.clf_scaler_features and self.clf_features and len(self.clf_scaler_features) != len(self.clf_features):
+            print(
+                f"Warning: classification feature mismatch: scaler has {len(self.clf_scaler_features)}, model expects {len(self.clf_features)}."
+            )
         self.clf_time_steps = self.meta_clf["time_steps"] # Giá trị 15
         self.dl_model_clf = tf.keras.models.load_model(
             f"{settings.MODEL_DIR}/sjc_classification.h5", 
             compile=False
         )
+
+        scaler_set = set(self.clf_scaler_features)
+        model_set = set(self.clf_features)
+
+        extra_in_scaler = scaler_set - model_set
+        missing_in_model = model_set - scaler_set
+
+        print(f"Các cột thừa trong Scaler: {extra_in_scaler}")
+        print(f"Các cột Model cần nhưng Scaler không có: {missing_in_model}")
+
         try:
             self.xgb_model = joblib.load(f"{settings.MODEL_DIR}/best_xgb_model.pkl")
             with open(f"{settings.MODEL_DIR}/best_xgb_enhanced_params.json", 'r', encoding='utf-8') as f:
@@ -46,7 +114,7 @@ class GoldPredictionEngine:
             
             # Đọc features và k riêng của XGBoost từ file JSON
             # (Nếu JSON không có thì fallback về dùng chung với LSTM)
-            self.xgb_features = self.xgb_meta.get("feature_columns", self.feature_cols)
+            self.xgb_features = self.xgb_meta.get("feature_columns") or list(XGB_FEATURE_COLUMNS)
             self.xgb_k = self.xgb_meta.get("best_k", self.best_k)
             print("Loaded XGBoost model successfully.")
         except Exception as e:
@@ -87,8 +155,15 @@ class GoldPredictionEngine:
                 
             current_window_diff = np.vstack([current_window_diff[1:], new_delta_row])
 
-        trend = "tăng 📈" if predictions[-1] > predictions[0] else "giảm 📉"
-        return {"predictions": predictions, "trend": trend}
+        trend_predictions, trend_scores, trend = summarize_price_path(float(last_actual_sjc_price), predictions)
+        trend_label = "tăng 📈" if trend == "up" else "giảm 📉" if trend == "down" else "đi ngang"
+        return {
+            "predictions": predictions,
+            "base_price": float(last_actual_sjc_price),
+            "trend": trend_label,
+            "trend_predictions": trend_predictions,
+            "trend_scores": trend_scores,
+        }
     
 
     def predict_trend_classification(self, df_diff):
@@ -147,27 +222,10 @@ class GoldPredictionEngine:
         import pandas as pd
         import numpy as np
         from sklearn.preprocessing import MinMaxScaler
-        
-        xgb_features = ['Interest', 'CPI', 'Real_Yield_10Y', 'Gold_Close', 'Gold_High', 'Gold_Low', 'Gold_Volume', 'USD_index_Close', 'Oil_Close', 'USD_VND_Close', 'GVZ_Close', 'VIX_Close', 'ETF_Holdings_Close', 'MOVE_Index_Close', 'Gold_world_vnd', 'SJC_Premium', 'SJC_Premium_Percent', 'Shock_Index', 'SJC_lag1', 'SJC_lag7', 'SJC_ma7', 'Gold_return', 'Gold_volume_rank', 'Gold_range', 'Gold_volatility_7', 'Gold_momentum', 'Gold_Volume_Anomaly', 'PVT', 'year', 'month', 'day', 'dayofweek', 'weekofyear', 'quarter']
-        
-        df_temp = df_raw.copy()
-        
-        # ==========================================
-        # 🧹 BƯỚC SỬA LỖI: LÀM SẠCH DỮ LIỆU RÁC (INF/NAN)
-        # ==========================================
-        df_temp.replace([np.inf, -np.inf], np.nan, inplace=True)
-        df_temp.ffill(inplace=True) # Lấp lỗ hổng bằng dữ liệu ngày hôm trước
-        df_temp.bfill(inplace=True) # Lấp lỗ hổng bằng dữ liệu ngày hôm sau
-        df_temp.fillna(0, inplace=True) # Đảm bảo an toàn 100% không còn NaN
-        
-        # Tạo 6 cột thời gian
-        df_temp["year"] = df_temp.index.year
-        df_temp["month"] = df_temp.index.month
-        df_temp["day"] = df_temp.index.day
-        df_temp["dayofweek"] = df_temp.index.dayofweek
-        df_temp["weekofyear"] = df_temp.index.isocalendar().week.astype(int)
-        df_temp["quarter"] = df_temp.index.quarter
-        
+
+        xgb_features = list(self.xgb_features)
+        df_temp = _prepare_xgb_feature_frame(df_raw)
+
         scaler_ml_X = MinMaxScaler()
         scaler_ml_X.fit(df_temp[xgb_features])
         
@@ -176,6 +234,8 @@ class GoldPredictionEngine:
         
         # Lấy lịch sử SJC từ mảng ĐÃ LÀM SẠCH
         sjc_history = df_temp['SJC'].tolist() 
+        current_price = float(sjc_history[-1]) if sjc_history else 0.0
+        base_price = current_price
         predictions = []
         
         for i in range(1, days + 1):
@@ -193,16 +253,21 @@ class GoldPredictionEngine:
             
             X_input = pd.DataFrame([current_row], columns=xgb_features)
             X_input_scaled = scaler_ml_X.transform(X_input)
-            
-            next_price = float(self.xgb_model.predict(X_input_scaled)[0])
+            predicted_delta = float(self.xgb_model.predict(X_input_scaled)[0])
+            next_price = current_price + predicted_delta
             predictions.append(next_price)
             
+            current_price = next_price
             sjc_history.append(next_price)
             
-        trend = "tăng 📈" if predictions[-1] > predictions[0] else "giảm 📉"
+        trend_predictions, trend_scores, trend = summarize_price_path(base_price, predictions)
+        trend_label = "tăng 📈" if trend == "up" else "giảm 📉" if trend == "down" else "đi ngang"
         return {
             "predictions": predictions, 
-            "trend": trend,
+            "base_price": base_price,
+            "trend": trend_label,
+            "trend_predictions": trend_predictions,
+            "trend_scores": trend_scores,
             "model_used": "XGBoost 🚀"
         }
 
@@ -260,6 +325,7 @@ def classify_price_path(last_price, predicted_prices):
 
 
 PRICE_ARTIFACT_MODEL_CODES = {"lstm-k10-price-v1", "meta-lstm-k10-price-v1"}
+GRU_ARTIFACT_MODEL_CODES = {"gru-price-v1"}
 TREND_ARTIFACT_MODEL_CODES = {"sjc-classification-v1"}
 
 
@@ -314,13 +380,84 @@ def _predict_future(self, df_diff, last_actual_sjc_price, days: int):
         current_window_diff = np.vstack([current_window_diff[1:], new_feature_row])
 
     trend = _overall_trend(float(last_actual_sjc_price), predictions)
-    return {"predictions": predictions, "trend": trend}
+    return {"predictions": predictions, "base_price": float(last_actual_sjc_price), "trend": trend}
+
+
+def _predict_future_gru(self, last_actual_sjc_price, days: int):
+    if getattr(self, "gru_model", None) is None:
+        return self.predict_future(load_feature_prediction_data(required_columns=set(self.feature_cols) | {"SJC"})[0], last_actual_sjc_price, days)
+
+    feature_frame = load_feature_dataset_frame()
+    feature_columns = list(
+        getattr(self, "gru_feature_cols", None)
+        or [column for column in feature_frame.columns if column not in {"date", "SJC", "SJC_Premium_Zscore", "Policy_Risk_Zone"}]
+    )
+    if not feature_columns:
+        return {"predictions": [], "trend": "flat"}
+
+    working = feature_frame.sort_values("date").reset_index(drop=True)
+    current_row = working[feature_columns].tail(1).iloc[0].copy()
+    price_history = working["SJC"].astype(float).tolist() if "SJC" in working.columns else [float(last_actual_sjc_price)]
+    premium_history = working["SJC_Premium"].astype(float).tolist() if "SJC_Premium" in working.columns else []
+    current_price = float(last_actual_sjc_price)
+    world_price = float(current_row.get("Gold_world_vnd", current_price)) or float(current_price)
+    policy_risk_zone = float(current_row.get("Policy_Risk_Zone", 0.0))
+    predictions = []
+
+    for _ in range(days):
+        current_row["SJC_lag1"] = price_history[-1]
+        current_row["SJC_lag7"] = price_history[-7] if len(price_history) >= 7 else price_history[-1]
+        current_row["SJC_ma7"] = float(np.mean(price_history[-7:])) if len(price_history) >= 7 else price_history[-1]
+
+        premium = current_price - world_price
+        current_row["SJC_Premium"] = premium
+        current_row["SJC_Premium_Percent"] = (premium / world_price * 100.0) if world_price else 0.0
+        premium_history.append(premium)
+        trailing_premium = np.asarray(premium_history[-30:], dtype=float)
+        if trailing_premium.size >= 2:
+            premium_std = float(np.std(trailing_premium))
+            current_row["SJC_Premium_Zscore"] = float((premium - float(np.mean(trailing_premium))) / premium_std) if premium_std else 0.0
+        else:
+            current_row["SJC_Premium_Zscore"] = 0.0
+        current_row["Policy_Risk_Zone"] = policy_risk_zone
+
+        input_values = pd.to_numeric(current_row[feature_columns], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0).to_numpy(dtype=float).reshape(1, 1, len(feature_columns))
+        predicted_delta = float(np.ravel(self.gru_model.predict(input_values, verbose=0))[0])
+        next_price = current_price + predicted_delta
+        predictions.append(float(next_price))
+
+        current_price = next_price
+        price_history.append(next_price)
+
+    trend = _overall_trend(float(last_actual_sjc_price), predictions)
+    return {"predictions": predictions, "base_price": float(last_actual_sjc_price), "trend": trend}
 
 
 def _predict_trend_classification(self, df_diff):
-    latest_data_diff = self._prepare_feature_window(df_diff, self.clf_features, self.clf_time_steps)
-    X_input_scaled = self.scaler_X_clf.transform(latest_data_diff)
-    X_input = X_input_scaled.reshape(1, self.clf_time_steps, len(self.clf_features))
+    from sklearn.preprocessing import MinMaxScaler
+
+    model_features = list(getattr(self, "clf_features", []))
+    if not model_features:
+        return {
+            "predicted_trend": "Giảm",
+            "confidence_percent": 0.0,
+            "up_probability": 0.0,
+            "down_probability": 100.0,
+        }
+
+    latest_data_diff = self._prepare_feature_window(df_diff, model_features, self.clf_time_steps)
+
+    scaler_frame = df_diff.copy()
+    for column in model_features:
+        if column not in scaler_frame.columns:
+            scaler_frame[column] = 0.0
+
+    scaler_frame = scaler_frame[model_features].apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    trend_scaler = MinMaxScaler()
+    trend_scaler.fit(scaler_frame)
+    X_input_scaled = trend_scaler.transform(latest_data_diff)
+
+    X_input = X_input_scaled.reshape(1, self.clf_time_steps, len(model_features))
 
     pred_prob = self.dl_model_clf.predict(X_input, verbose=0)
     prob = np.ravel(pred_prob)
@@ -345,6 +482,7 @@ def _predict_trend_classification(self, df_diff):
 
 GoldPredictionEngine._prepare_feature_window = _prepare_feature_window
 GoldPredictionEngine.predict_future = _predict_future
+GoldPredictionEngine.predict_future_gru = _predict_future_gru
 GoldPredictionEngine.predict_trend_classification = _predict_trend_classification
 
 
@@ -457,6 +595,11 @@ def forecast_price_path(history_prices, days, strategy="default", provider="buil
     history = _coerce_history_prices(history_prices)
     if not history or days <= 0:
         return [], False
+
+    if provider == "artifact" and source == "sjc" and model_code in GRU_ARTIFACT_MODEL_CODES:
+        engine = _get_engine()
+        result = engine.predict_future_gru(history[-1], days)
+        return result["predictions"], False
 
     if provider == "artifact" and source == "sjc" and model_code in PRICE_ARTIFACT_MODEL_CODES:
         engine = _get_engine()
