@@ -20,14 +20,27 @@ const CHART_RANGE_OPTIONS: Array<{ value: DashboardChartRange; label: string }> 
 type ChartSource = 'sjc' | 'world';
 type ChartMode = 'single' | 'compare';
 
+function normalizeDateInput(value: string): string {
+  return value.trim().slice(0, 10);
+}
+
+function getOrderedDateRange(from: string, to: string): { startDate: string; endDate: string } {
+  const startDate = normalizeDateInput(from);
+  const endDate = normalizeDateInput(to);
+
+  if (!startDate || !endDate) {
+    return { startDate, endDate };
+  }
+
+  return startDate <= endDate ? { startDate, endDate } : { startDate: endDate, endDate: startDate };
+}
+
 function filterChartByDateRange(chart: PriceChartResponse | null, from: string, to: string): { dates: string[]; prices: number[] } {
   if (!chart || !chart.prices.length) {
     return { dates: [], prices: [] };
   }
 
-  const sortedDates = [from, to].filter(Boolean).sort();
-  const startDate = sortedDates[0] ?? '';
-  const endDate = sortedDates[1] ?? '';
+  const { startDate, endDate } = getOrderedDateRange(from, to);
   if (!startDate && !endDate) {
     return { dates: chart.dates.slice(), prices: chart.prices.slice() };
   }
@@ -53,6 +66,14 @@ function alignSeriesByDate(
   const sjcMap = new Map(sjc.dates.map((date, index) => [date, sjc.prices[index]] as const));
   const worldMap = new Map(world.dates.map((date, index) => [date, world.prices[index]] as const));
   const dates = [...sjcMap.keys()].filter((date) => worldMap.has(date)).sort();
+  if (!dates.length) {
+    const fallbackDates = sjc.dates.length ? sjc.dates : world.dates;
+    return {
+      dates: fallbackDates,
+      sjcPrices: fallbackDates.map((date, index) => sjcMap.get(date) ?? sjc.prices[index] ?? 0),
+      worldPrices: fallbackDates.map((date, index) => worldMap.get(date) ?? world.prices[index] ?? 0),
+    };
+  }
   return {
     dates,
     sjcPrices: dates.map((date) => sjcMap.get(date) ?? 0),
@@ -329,28 +350,26 @@ export function DashboardPage() {
 
             <div className="chart-tool-group">
               <span className="chart-tool-label">Range</span>
-              {isAuthenticated ? (
-                <div className="tabs tabs--compact">
-                  <button type="button" className={`tab ${chartRangeMode === 'preset' ? 'is-active' : ''}`} onClick={() => setChartRangeMode('preset')}>
-                    Preset
-                  </button>
-                  <button
-                    type="button"
-                    className={`tab ${chartRangeMode === 'custom' ? 'is-active' : ''}`}
-                    onClick={() => {
-                      setChartRangeMode('custom');
-                      if (visibleChart.dates.length) {
-                        setCustomFrom((current) => current || visibleChart.dates[0]);
-                        setCustomTo((current) => current || visibleChart.dates[visibleChart.dates.length - 1]);
-                      }
-                    }}
-                  >
-                    Custom
-                  </button>
-                </div>
-              ) : null}
+              <div className="tabs tabs--compact">
+                <button type="button" className={`tab ${chartRangeMode === 'preset' ? 'is-active' : ''}`} onClick={() => setChartRangeMode('preset')}>
+                  Preset
+                </button>
+                <button
+                  type="button"
+                  className={`tab ${chartRangeMode === 'custom' ? 'is-active' : ''}`}
+                  onClick={() => {
+                    setChartRangeMode('custom');
+                    if (visibleChart.dates.length) {
+                      setCustomFrom((current) => current || visibleChart.dates[0]);
+                      setCustomTo((current) => current || visibleChart.dates[visibleChart.dates.length - 1]);
+                    }
+                  }}
+                >
+                  Custom
+                </button>
+              </div>
 
-              {chartRangeMode === 'preset' || !isAuthenticated ? (
+              {chartRangeMode === 'preset' ? (
                 <div className="tabs tabs--compact chart-range-tabs">
                   {CHART_RANGE_OPTIONS.map((option) => (
                     <button
@@ -375,14 +394,16 @@ export function DashboardPage() {
                   </label>
                 </div>
               )}
+              {chartRangeMode === 'custom' ? (
+                <p className="section-title__meta">
+                  Active window: {formatDateOnly(getOrderedDateRange(customFrom, customTo).startDate)} to {formatDateOnly(getOrderedDateRange(customFrom, customTo).endDate)}
+                </p>
+              ) : null}
             </div>
           </div>
 
           <p className="hero__chart-hint">
-            {isAuthenticated
-              ? 'Signed-in users can slice the full historical feed by date. Guests are limited to the latest one year of history.'
-              : 'Guest access is limited to the latest one year of history.'}
-            {chartRangeMode === 'custom' && isAuthenticated ? ` Active window: ${chartRangeSubtitle}.` : ''}
+            Signed-in users can slice the full historical feed by date. Guests can still use custom date filtering within the available history.
           </p>
 
           <div className="chip-row source-chip-row">
@@ -397,7 +418,7 @@ export function DashboardPage() {
         {chartLoading ? <div className="panel panel--compact">Loading chart...</div> : null}
         {chartError ? <div className="empty-state">Chart unavailable: {chartError}</div> : null}
 
-        {!chartLoading && !chartError && visibleChart.prices.length ? (
+        {!chartLoading && !chartError && chartView === 'chart' && visibleChart.prices.length ? (
           visibleChart.mode === 'compare' ? (
             <div className="stack">
               <Sparkline
@@ -429,7 +450,35 @@ export function DashboardPage() {
           )
         ) : null}
 
-        {!chartLoading && !chartError && !visibleChart.prices.length ? <div className="empty-state">No data found for the selected range.</div> : null}
+        {!chartLoading && !chartError && chartView === 'chart' && !visibleChart.prices.length ? <div className="empty-state">No data found for the selected range.</div> : null}
+
+        {!chartLoading && !chartError && chartView === 'numbers' ? (
+          <div className="panel panel--compact stack">
+            {visibleChart.mode === 'compare' ? (
+              visibleChart.dates.map((date, index) => (
+                <div key={date} className="item-row">
+                  <div>
+                    <strong>{date}</strong>
+                    <p>SJC: {formatMarketPrice(visibleChart.sjcPrices[index], 'sjc')} | World: {formatMarketPrice(visibleChart.worldPrices[index], 'world')}</p>
+                  </div>
+                  <span className="badge badge--neutral">
+                    Spread: {(visibleChart.sjcPrices[index] - visibleChart.worldPrices[index]).toLocaleString('vi-VN')} VND
+                  </span>
+                </div>
+              ))
+            ) : (
+              visibleChart.dates.map((date, index) => (
+                <div key={date} className="item-row">
+                  <div>
+                    <strong>{date}</strong>
+                    <p>{formatMarketPrice(visibleChart.prices[index], chartSource)}</p>
+                  </div>
+                  <span className="badge badge--neutral">{index + 1} / {visibleChart.dates.length}</span>
+                </div>
+              ))
+            )}
+          </div>
+        ) : null}
 
         <p className="hero__chart-hint">
           {chartView === 'chart'

@@ -45,7 +45,7 @@ class PredictionService:
         artifact_codes = {
             "meta-lstm-k10-price-v1",
             "lstm-k10-price-v1",
-            "gru-price-v1",
+            "gr-price-v1",
             "sjc-classification-v1",
         }
         if identifier in artifact_codes:
@@ -84,7 +84,7 @@ class PredictionService:
 
     def _model_strategy(self, model) -> str:
         config = model.config_json or {}
-        strategy = config.get("strategy") or "linear"
+        strategy = config.get("strateg") or "linear"
         return str(strategy)
 
     def _record_prediction(

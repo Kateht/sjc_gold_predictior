@@ -47,7 +47,7 @@ def seed_default_models(db: Session) -> None:
         logger.warning("Could not compute price metrics during seeding; using placeholders: %s", exc)
         price_model_metrics = {
             "lstm-k10-price-v1": {"mae": None, "rmse": None, "mape": None, "r2": None},
-            "gru-price-v1": {"mae": None, "rmse": None, "mape": None, "r2": None},
+            "gr-price-v1": {"mae": None, "rmse": None, "mape": None, "r2": None},
         }
 
     default_price_metrics = {"mae": None, "rmse": None, "mape": None, "r2": None}
