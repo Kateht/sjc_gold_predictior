@@ -5,6 +5,8 @@ const friendlyLabels: Record<string, string> = {
   'gru-price-v1': 'Best GRU price forecast',
   'sjc-classification-v1': 'SJC direction classifier',
   'lstm-k10-price-v1': 'LSTM K10 price forecast',
+  'world-price-v1': 'World gold price forecast',
+  'world-trend-v1': 'World gold trend forecast',
 };
 
 export function getUserFacingModelLabel(model?: Pick<ModelRead, 'code' | 'name'> | null): string {

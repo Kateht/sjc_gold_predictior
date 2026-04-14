@@ -4,8 +4,8 @@ import hashlib
 import logging
 import re
 import threading
+import time
 from datetime import datetime, timedelta, timezone
-from urllib.parse import quote_plus
 
 import requests
 from sqlalchemy.orm import Session
@@ -16,8 +16,13 @@ from app.db.models import NewsArticle, NewsCategory
 logger = logging.getLogger(__name__)
 _GDELT_ENDPOINT = "https://api.gdeltproject.org/api/v2/doc/doc"
 _NEWS_SYNC_TTL = timedelta(minutes=30)
+_GDELT_MIN_REQUEST_INTERVAL = timedelta(seconds=10)
+_GDELT_RETRY_COUNT = 3
+_GDELT_RATE_LIMIT_WAIT = timedelta(seconds=10)
 _NEWS_SYNC_LOCK = threading.Lock()
+_GDELT_REQUEST_LOCK = threading.Lock()
 _LAST_SYNC_AT: datetime | None = None
+_LAST_GDELT_REQUEST_AT: datetime | None = None
 
 _CATEGORY_QUERIES: dict[str, str] = {
     "economy": "gold inflation rates economy",
@@ -41,25 +46,71 @@ def _parse_seen_date(value: str | None) -> datetime | None:
         return None
 
 
-def _fetch_gdelt_articles(query: str, limit: int = 8) -> list[dict[str, object]]:
-    response = requests.get(
-        _GDELT_ENDPOINT,
-        params={
-            "query": query,
-            "mode": "artlist",
-            "format": "json",
-            "sort": "datedesc",
-            "maxrecords": limit,
-        },
-        timeout=12,
-    )
-    response.raise_for_status()
+def _gdelt_rate_limited(response: requests.Response) -> bool:
+    if response.status_code == 429:
+        return True
 
-    payload = response.json()
-    articles = payload.get("articles") if isinstance(payload, dict) else None
-    if not isinstance(articles, list):
-        return []
-    return [article for article in articles if isinstance(article, dict)]
+    body = (getattr(response, "text", "") or "").lower()
+    return "limit requests to one every 5 seconds" in body or "contact kalev.leetaru5@gmail.com" in body
+
+
+def _wait_for_gdelt_slot() -> None:
+    global _LAST_GDELT_REQUEST_AT
+
+    now = datetime.now(timezone.utc)
+    if _LAST_GDELT_REQUEST_AT is not None:
+        elapsed = now - _LAST_GDELT_REQUEST_AT
+        remaining = _GDELT_MIN_REQUEST_INTERVAL - elapsed
+        if remaining > timedelta(0):
+            time.sleep(remaining.total_seconds())
+
+    _LAST_GDELT_REQUEST_AT = datetime.now(timezone.utc)
+
+
+def _fetch_gdelt_articles(query: str, limit: int = 8) -> list[dict[str, object]]:
+    last_error: Exception | None = None
+
+    for attempt in range(1, _GDELT_RETRY_COUNT + 1):
+        with _GDELT_REQUEST_LOCK:
+            _wait_for_gdelt_slot()
+            response = requests.get(
+                _GDELT_ENDPOINT,
+                params={
+                    "query": query,
+                    "mode": "artlist",
+                    "format": "json",
+                    "sort": "datedesc",
+                    "maxrecords": limit,
+                },
+                timeout=12,
+            )
+
+        if _gdelt_rate_limited(response):
+            last_error = RuntimeError((getattr(response, "text", "") or "GDELT rate limit reached").strip())
+            if attempt < _GDELT_RETRY_COUNT:
+                time.sleep(_GDELT_RATE_LIMIT_WAIT.total_seconds())
+                continue
+            raise last_error
+
+        try:
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as exc:
+            last_error = exc
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            if status_code in {429, 500, 502, 503, 504} and attempt < _GDELT_RETRY_COUNT:
+                time.sleep(_GDELT_RATE_LIMIT_WAIT.total_seconds())
+                continue
+            raise
+
+        articles = payload.get("articles") if isinstance(payload, dict) else None
+        if not isinstance(articles, list):
+            return []
+        return [article for article in articles if isinstance(article, dict)]
+
+    if last_error is not None:
+        raise last_error
+    return []
 
 
 def _upsert_news_article(db: Session, category: NewsCategory, payload: dict[str, object], rank: int) -> None:

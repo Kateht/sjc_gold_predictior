@@ -36,3 +36,15 @@ class CrawlerServiceCommandTest(unittest.TestCase):
         self.assertIn("--start", command)
         self.assertIn("--end", command)
         self.assertIn("2026-04-10", command)
+
+    def test_report_command_includes_report_output_path(self) -> None:
+        payload = CrawlerRunCreate(
+            task=CrawlerTask.report,
+            start=date(2026, 4, 1),
+            end=date(2026, 4, 10),
+        )
+
+        command = _build_crawler_command(payload, report_output_path="/tmp/crawler-report.txt")
+
+        self.assertIn("--report-output", command)
+        self.assertIn("/tmp/crawler-report.txt", command)

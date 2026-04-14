@@ -43,7 +43,7 @@ def predict_trend(
 
 @router.post("/assistant/queries", response_model=GoldResponse)
 async def create_assistant_query(query: GoldQuery):
-    answer = await ai_service.get_answer(query.question)
+    answer = await ai_service.get_answer(query.question, query.conversation_history)
     return {"answer": answer}
 
 

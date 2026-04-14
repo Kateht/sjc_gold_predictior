@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.ai.utils import normalize_source
 from app.core.exceptions import ConflictError, NotFoundError
 from app.db.models import MLModel
 from app.schemas.models import ModelCreate, ModelUpdate, PredictionKind
@@ -18,7 +19,36 @@ def _kind_value(kind: PredictionKind | str | None) -> str | None:
     return str(kind)
 
 
-def list_models(db: Session, prediction_kind: PredictionKind | str | None = None, active_only: bool = False) -> list[MLModel]:
+def _normalized_source_value(source: str | None) -> str | None:
+    if source is None:
+        return None
+    cleaned = str(source).strip()
+    if not cleaned:
+        return None
+    return normalize_source(cleaned)
+
+
+def _model_source(model: MLModel) -> str:
+    config = model.config_json if isinstance(model.config_json, dict) else {}
+    source_value = config.get("source") if isinstance(config, dict) else None
+    if source_value is not None and str(source_value).strip():
+        return normalize_source(str(source_value))
+    return "sjc"
+
+
+def _filter_models_by_source(models: list[MLModel], source: str | None) -> list[MLModel]:
+    normalized_source = _normalized_source_value(source)
+    if normalized_source is None:
+        return models
+    return [model for model in models if _model_source(model) == normalized_source]
+
+
+def list_models(
+    db: Session,
+    prediction_kind: PredictionKind | str | None = None,
+    active_only: bool = False,
+    source: str | None = None,
+) -> list[MLModel]:
     query = db.query(MLModel)
     kind_value = _kind_value(prediction_kind)
     if kind_value:
@@ -26,7 +56,8 @@ def list_models(db: Session, prediction_kind: PredictionKind | str | None = None
     if active_only:
         query = query.filter(MLModel.is_active.is_(True))
     query = query.filter(~MLModel.code.in_(DEPRECATED_MODEL_CODES))
-    return query.order_by(MLModel.is_default.desc(), MLModel.id.asc()).all()
+    models = query.order_by(MLModel.is_default.desc(), MLModel.id.asc()).all()
+    return _filter_models_by_source(models, source)
 
 
 def get_model_by_identifier(
@@ -34,6 +65,7 @@ def get_model_by_identifier(
     identifier: str | int | None,
     prediction_kind: PredictionKind | str | None = None,
     active_only: bool = False,
+    source: str | None = None,
 ) -> MLModel | None:
     query = db.query(MLModel)
     kind_value = _kind_value(prediction_kind)
@@ -43,22 +75,28 @@ def get_model_by_identifier(
         query = query.filter(MLModel.is_active.is_(True))
     query = query.filter(~MLModel.code.in_(DEPRECATED_MODEL_CODES))
 
+    models = _filter_models_by_source(query.order_by(MLModel.is_default.desc(), MLModel.id.asc()).all(), source)
+    if not models:
+        return None
+
     if identifier is None or str(identifier).strip() == "":
-        default_model = query.filter(MLModel.is_default.is_(True)).order_by(MLModel.id.asc()).first()
-        if default_model:
-            return default_model
-        return query.order_by(MLModel.id.asc()).first()
+        return models[0]
 
     identifier_text = str(identifier).strip()
     if identifier_text.isdigit():
-        model = query.filter(MLModel.id == int(identifier_text)).first()
-        if model:
+        model_id = int(identifier_text)
+        for model in models:
+            if model.id == model_id:
+                return model
+
+    for model in models:
+        if model.code == identifier_text:
             return model
-    return query.filter(MLModel.code == identifier_text).first()
+    return None
 
 
-def get_default_model(db: Session, prediction_kind: PredictionKind | str) -> MLModel | None:
-    return get_model_by_identifier(db, None, prediction_kind=prediction_kind, active_only=True)
+def get_default_model(db: Session, prediction_kind: PredictionKind | str, source: str | None = None) -> MLModel | None:
+    return get_model_by_identifier(db, None, prediction_kind=prediction_kind, active_only=True, source=source)
 
 
 def create_model(db: Session, payload: ModelCreate, created_by_id: int | None = None) -> MLModel:
@@ -121,10 +159,19 @@ def set_default_model(db: Session, model: MLModel) -> MLModel:
     return model
 
 
-def resolve_prediction_model(db: Session, identifier: str | int | None, prediction_kind: PredictionKind | str) -> MLModel:
-    model = get_model_by_identifier(db, identifier, prediction_kind=prediction_kind, active_only=True)
+def resolve_prediction_model(
+    db: Session,
+    identifier: str | int | None,
+    prediction_kind: PredictionKind | str,
+    source: str | None = None,
+) -> MLModel:
+    model = get_model_by_identifier(db, identifier, prediction_kind=prediction_kind, active_only=True, source=source)
     if model:
         return model
+
+    normalized_source = _normalized_source_value(source)
+    if normalized_source == "world":
+        raise NotFoundError(f"No active model found for {prediction_kind} and source {normalized_source}")
 
     fallback = get_default_model(db, prediction_kind)
     if fallback:

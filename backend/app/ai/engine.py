@@ -553,7 +553,7 @@ def _trend_score(delta, reference, label):
 def _overall_trend(last_price, predicted_prices):
     if not predicted_prices:
         return "flat"
-    return _trend_label(float(predicted_prices[-1]) - float(last_price), float(last_price))
+    return _trend_label(float(predicted_prices[0]) - float(last_price), float(last_price))
 
 
 def _forecast_builtin_price_path(history_prices, days, strategy="default"):

@@ -105,6 +105,11 @@ export interface GoldResponse {
   answer: string;
 }
 
+export interface AssistantConversationTurn {
+  role: 'assistant' | 'user';
+  content: string;
+}
+
 export interface NewsCategoryRead {
   id: number;
   slug: string;

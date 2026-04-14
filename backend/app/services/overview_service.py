@@ -44,7 +44,7 @@ def get_overview_data():
             "change_vnd": round(change_sjc, 2),
             "change_percent": round(change_pct_sjc, 2),
             "trend_7d_vnd": [round(x, 2) for x in trend_sjc],
-            "unit": "Triệu VND/Lượng",
+            "unit": "Million VND/Tael",
             "source": "Local Dataset",
             "status": "success"
         }

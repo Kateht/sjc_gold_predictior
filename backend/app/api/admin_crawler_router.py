@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from pathlib import Path
+
+from app.core.config import settings
 from app.core.deps import require_admin
 from app.core.exceptions import NotFoundError
 from app.db.models import User
@@ -28,6 +32,33 @@ def admin_get_crawler_run(run_id: int, db: Session = Depends(get_db)):
     if not run:
         raise NotFoundError("Crawler run not found")
     return CrawlerRunRead.model_validate(run)
+
+
+@router.get("/runs/{run_id}/report")
+def admin_download_crawler_report(run_id: int, db: Session = Depends(get_db)):
+    run = get_crawler_run(db, run_id)
+    if not run:
+        raise NotFoundError("Crawler run not found")
+    if run.task != "report" or run.status != "success":
+        raise NotFoundError("Crawler report is not available for this run")
+
+    report_path_text = None
+    if isinstance(run.params_json, dict):
+        report_path_text = run.params_json.get("report_output_path")
+
+    if report_path_text:
+        report_path = Path(str(report_path_text)).expanduser()
+    else:
+        log_path = Path(run.log_path).expanduser() if run.log_path else Path(settings.PROJECT_ROOT)
+        report_path = log_path / "reports" / f"crawler_report_run_{run.id}.txt"
+
+    if not report_path.is_absolute():
+        report_path = (Path(settings.PROJECT_ROOT) / report_path).resolve()
+
+    if not report_path.exists():
+        raise NotFoundError("Crawler report file not found")
+
+    return FileResponse(path=str(report_path), media_type="text/plain", filename=report_path.name)
 
 
 @router.post("/runs", response_model=CrawlerRunRead, status_code=status.HTTP_202_ACCEPTED)

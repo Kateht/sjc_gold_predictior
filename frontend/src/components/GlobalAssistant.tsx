@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 
 import { askAssistant } from '@/lib/api';
 import { RichMessage } from '@/components/RichMessage';
+import type { AssistantConversationTurn } from '@/types';
 
 type AssistantRole = 'assistant' | 'user';
 
@@ -13,30 +14,20 @@ type AssistantMessage = {
 };
 
 const defaultSuggestions = [
-  'Bạn là ai?',
-  'Tóm tắt xu hướng SJC hôm nay',
-  'Model nào đang phù hợp cho dự báo 7 ngày?',
-  'Bạn có thể hỗ trợ những gì?',
+  'Hỏi một câu bất kỳ',
+  'Giải thích ngữ cảnh của trang',
+  'So sánh model đang có',
+  'Tóm tắt điều đáng chú ý',
 ];
 
+const MAX_CONTEXT_TURNS = 6;
+
 const routeSuggestions: Record<string, string[]> = {
-  '/': [
-    'Dự báo giá vàng SJC trong 7 ngày tới (LSTM)',
-    'Dự báo giá vàng SJC 5 ngày tới',
-    'Xu hướng giá vàng ngày mai là tăng hay giảm? (Classification)',
-  ],
-  '/predict': [
-    'Dự báo giá vàng SJC trong 7 ngày tới (LSTM)',
-    'Dự báo giá vàng SJC 5 ngày tới',
-    'Xu hướng giá vàng ngày mai là tăng hay giảm? (Classification)',
-  ],
-  '/news': ['Tin tức nào đáng chú ý nhất?', 'Nhóm tin nào đang tác động mạnh tới vàng?', 'Có headline nào về lãi suất không?'],
-  '/history': ['Xu hướng lịch sử 30 ngày là gì?', 'Tìm điểm đảo chiều gần nhất', 'Xuất CSV lịch sử ra sao?'],
-  '/admin': [
-    'Kiểm tra trạng thái crawler dữ liệu',
-    'Xem các model đang được kích hoạt',
-    'Kiểm tra lịch sử đồng bộ dữ liệu',
-  ],
+  '/': ['Giải thích dashboard hiện tại', 'So sánh model price và trend', 'Hỏi tiếp theo ngữ cảnh vừa rồi'],
+  '/predict': ['Giải thích kết quả vừa chạy', 'So sánh hai model dự báo', 'Hỏi tiếp theo câu trước'],
+  '/news': ['Tóm tắt một bài tin', 'Tin này ảnh hưởng gì tới vàng?', 'Hỏi một chủ đề tin khác'],
+  '/history': ['Cách đọc lịch sử dự báo', 'Tìm một mốc thời gian cụ thể', 'Xuất CSV lịch sử như thế nào?'],
+  '/admin': ['Kiểm tra crawler dữ liệu', 'Xem model đang active', 'Hỏi về lịch đồng bộ'],
   '/login': ['Hỗ trợ đăng nhập', 'Quên mật khẩu thì làm sao?', 'Tôi cần trợ giúp truy cập tài khoản'],
 };
 
@@ -80,8 +71,15 @@ function createInitialMessage(pathname: string): AssistantMessage {
   return {
     id: 1,
     role: 'assistant',
-    content: `Mình có thể hỗ trợ xem giá vàng, dự báo, chọn model, tin tức và lịch sử trên ${getRouteTitle(pathname)}.`,
+    content: `Mình có thể hỗ trợ xem giá vàng, dự báo, chọn model, tin tức và lịch sử trên ${getRouteTitle(pathname)}. Bạn có thể hỏi tự do hoặc hỏi tiếp theo ngữ cảnh các lượt trước.`,
   };
+}
+
+function buildConversationHistory(messages: AssistantMessage[]): AssistantConversationTurn[] {
+  return messages
+    .filter((message) => message.content.trim())
+    .slice(-MAX_CONTEXT_TURNS)
+    .map((message) => ({ role: message.role, content: message.content }));
 }
 
 export function GlobalAssistant() {
@@ -122,13 +120,14 @@ export function GlobalAssistant() {
       return;
     }
 
+    const conversationHistory = buildConversationHistory(messages);
     setIsOpen(true);
     appendMessage('user', trimmed);
     setQuestion('');
     setIsSending(true);
 
     try {
-      const response = await askAssistant(trimmed);
+      const response = await askAssistant(trimmed, conversationHistory);
       appendMessage('assistant', response.answer);
     } catch (error) {
       appendMessage('assistant', error instanceof Error ? error.message : 'Trợ lý hiện đang tạm thời không khả dụng.');
@@ -166,7 +165,7 @@ export function GlobalAssistant() {
             <div>
               <p className="eyebrow">Trợ lý chung</p>
               <strong>{getRouteTitle(location.pathname)}</strong>
-              <span>Hỏi về giá, dự báo, model, tin tức hoặc lịch sử.</span>
+              <span>Hỏi tự do về giá, dự báo, model, tin tức hoặc lịch sử; bot sẽ bám theo ngữ cảnh gần nhất.</span>
             </div>
             <button type="button" className="button button--ghost assistant-dock__close" onClick={() => setIsOpen(false)}>
               Đóng
@@ -204,7 +203,7 @@ export function GlobalAssistant() {
           <form className="assistant-dock__composer" onSubmit={handleSubmit}>
             <textarea
               className="textarea textarea--chat"
-              placeholder="Hỏi về SJC, chọn model, tin tức hoặc lịch sử..."
+              placeholder="Hỏi tự do về SJC, chọn model, tin tức hoặc lịch sử..."
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
               onKeyDown={(event) => {
@@ -222,7 +221,7 @@ export function GlobalAssistant() {
                 Xóa
               </button>
             </div>
-            <p className="assistant-dock__hint">Nhấn Ctrl+Enter để gửi nhanh từ bàn phím.</p>
+            <p className="assistant-dock__hint">Nhấn Ctrl+Enter để gửi nhanh từ bàn phím, và bạn có thể hỏi tiếp câu trước mà không cần chọn gợi ý.</p>
           </form>
         </section>
       ) : null}

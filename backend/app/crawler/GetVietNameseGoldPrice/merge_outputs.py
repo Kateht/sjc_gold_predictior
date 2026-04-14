@@ -248,10 +248,10 @@ def build_final_uso_with_vn_gold_vnd_thousand_imputed(paths: MergePaths) -> Path
         if col != "Date":
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    start = pd.Timestamp(df["Date"].min()).normalize()
-    end = pd.Timestamp(df["Date"].max()).normalize()
-    fx = _load_or_fetch_usdvnd_close(paths, start, end).reindex(df["Date"])
-    fx = fx.ffill().bfill()
+    df = df.set_index("Date")
+    start = pd.Timestamp(df.index.min()).normalize()
+    end = pd.Timestamp(df.index.max()).normalize()
+    fx = _load_or_fetch_usdvnd_close(paths, start, end).reindex(df.index).ffill().bfill()
 
     gold_cols = {
         "PNJ_gia_mua",
@@ -268,14 +268,14 @@ def build_final_uso_with_vn_gold_vnd_thousand_imputed(paths: MergePaths) -> Path
         return "volume" in col.lower()
 
     for col in df.columns:
-        if col == "Date" or _is_volume_col(col):
+        if _is_volume_col(col):
             continue
         if col in gold_cols:
             df[col] = (df[col] * fx * OZ_PER_LUONG) / 1000.0
         else:
             df[col] = (df[col] * fx) / 1000.0
 
-    out = df.copy()
+    out = df.reset_index()
     out["Date"] = pd.to_datetime(out["Date"]).dt.strftime("%Y-%m-%d")
     out.to_csv(paths.final_uso_with_vn_gold_vnd_thousand_imputed_csv, index=False)
     return paths.final_uso_with_vn_gold_vnd_thousand_imputed_csv

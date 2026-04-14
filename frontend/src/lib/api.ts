@@ -1,6 +1,7 @@
 import { API_BASE_URL } from '@/lib/config';
 import { clearSession, loadSession, saveSession, sessionFromTokenPair } from '@/lib/auth';
 import type {
+  AssistantConversationTurn,
   AuthSession,
   CrawlerRunRead,
   DatasetSourceRead,
@@ -152,7 +153,7 @@ function filenameFromContentDisposition(contentDisposition: string | null): stri
   return filenameMatch?.[1] ?? null;
 }
 
-export async function downloadCsv(path: string, filename: string, params?: Record<string, QueryValue>): Promise<void> {
+async function downloadFile(path: string, filename: string, params?: Record<string, QueryValue>): Promise<void> {
   const response = await fetch(buildUrl(path, params), {
     headers: buildHeaders(undefined, true, false),
   });
@@ -178,6 +179,10 @@ export async function downloadCsv(path: string, filename: string, params?: Recor
   anchor.click();
   anchor.remove();
   window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
+}
+
+export async function downloadCsv(path: string, filename: string, params?: Record<string, QueryValue>): Promise<void> {
+  return downloadFile(path, filename, params);
 }
 
 export function getCurrentSession(): AuthSession | null {
@@ -232,10 +237,10 @@ export async function fetchPriceChart(range = '30d', source = 'sjc'): Promise<Pr
   });
 }
 
-export async function fetchModels(predictionKind?: string, activeOnly = true): Promise<ModelRead[]> {
+export async function fetchModels(predictionKind?: string, activeOnly = true, source?: string): Promise<ModelRead[]> {
   return request<ModelRead[]>('/models', {
     auth: false,
-    params: { prediction_kind: predictionKind, active_only: activeOnly },
+    params: { prediction_kind: predictionKind, active_only: activeOnly, source },
   });
 }
 
@@ -276,11 +281,11 @@ export async function fetchTrendPrediction(params: { days: number; model?: strin
   });
 }
 
-export async function askAssistant(question: string): Promise<GoldResponse> {
+export async function askAssistant(question: string, conversationHistory: AssistantConversationTurn[] = []): Promise<GoldResponse> {
   return request<GoldResponse>('/assistant/queries', {
     method: 'POST',
     auth: false,
-    body: { question },
+    body: { question, conversation_history: conversationHistory },
   });
 }
 
@@ -318,6 +323,10 @@ export async function fetchCrawlerRuns(limit = 20): Promise<CrawlerRunRead[]> {
 
 export async function fetchCrawlerRun(runId: number): Promise<CrawlerRunRead> {
   return request<CrawlerRunRead>(`/admin/crawler/runs/${runId}`);
+}
+
+export async function downloadCrawlerReport(runId: number): Promise<void> {
+  return downloadFile(`/admin/crawler/runs/${runId}/report`, `crawler-report-run-${runId}.txt`);
 }
 
 export async function triggerCrawlerRun(payload: Record<string, unknown>): Promise<CrawlerRunRead> {

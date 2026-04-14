@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 import re
 import warnings
 
@@ -10,6 +11,7 @@ import google.generativeai as genai
 from app.ai.engine import _get_engine
 from app.ai.utils import load_and_preprocess_data_for_gemini
 from app.core.config import settings
+from app.models.gold import ChatTurn
 
 
 IDENTITY_PATTERNS = (
@@ -69,6 +71,27 @@ GENERAL_CHAT_PATTERNS = (
     r"\btrò chuyện\b",
     r"\btán gẫu\b",
 )
+
+CONTEXT_DEPENDENT_PATTERNS = (
+    r"\bcòn\b",
+    r"\bvậy\b",
+    r"\bthế\b",
+    r"\bsao rồi\b",
+    r"\bthế nào\b",
+    r"\bnhư thế nào\b",
+    r"\btiếp theo\b",
+    r"\btiếp tục\b",
+    r"\bnữa thì sao\b",
+    r"\bcòn gì\b",
+    r"\bso với\b",
+    r"\bcái đó\b",
+    r"\bđó\b",
+    r"\bnó\b",
+    r"\bphần trước\b",
+    r"\bphần này\b",
+)
+
+RECENT_CONTEXT_TURNS = 6
 
 METRIC_PATTERNS = (
     r"\br2\b",
@@ -132,6 +155,7 @@ class GoldAIService:
         - Trả lời ngắn gọn, tự nhiên, đúng trọng tâm.
         - Nếu người dùng nói tiếng Việt thì ưu tiên trả lời tiếng Việt.
         - Có thể trò chuyện bình thường, chào hỏi, giải thích khái niệm, hoặc viết lại câu văn.
+        - Nếu người dùng hỏi nối tiếp hoặc tham chiếu ngữ cảnh trước đó, hãy tận dụng hội thoại gần đây để hiểu ý.
         - Không tiết lộ thông tin nội bộ như khóa API, biến môi trường, đường dẫn file, mã nguồn, schema database, hay chi tiết cấu hình backend.
         - Nếu câu hỏi liên quan đến vàng SJC, hãy trả lời ở mức tổng quan hoặc hướng người dùng sang chức năng dự báo khi cần số liệu cụ thể.
         """
@@ -211,6 +235,66 @@ class GoldAIService:
             "Nếu bạn muốn, mình có thể giải thích cách dùng hệ thống ở mức tổng quan hoặc hướng dẫn thao tác người dùng."
         )
 
+    def _recent_conversation_history(self, conversation_history: Sequence[ChatTurn] | None = None) -> list[ChatTurn]:
+        if not conversation_history:
+            return []
+
+        recent_history = [turn for turn in conversation_history if turn.content.strip()]
+        return recent_history[-RECENT_CONTEXT_TURNS:]
+
+    def _format_conversation_history(self, conversation_history: Sequence[ChatTurn] | None = None) -> str:
+        recent_history = self._recent_conversation_history(conversation_history)
+        if not recent_history:
+            return ""
+
+        lines: list[str] = []
+        for turn in recent_history:
+            label = "Người dùng" if turn.role == "user" else "Trợ lý"
+            lines.append(f"{label}: {turn.content.strip()}")
+        return "\n".join(lines)
+
+    def _conversation_context_text(self, question: str, conversation_history: Sequence[ChatTurn] | None = None) -> str:
+        parts = [question.strip()]
+        parts.extend(turn.content.strip() for turn in self._recent_conversation_history(conversation_history) if turn.content.strip())
+        return self._normalize_text(" ".join(part for part in parts if part))
+
+    def _build_contextual_prompt(self, question: str, conversation_history: Sequence[ChatTurn] | None = None, *, mode: str) -> str:
+        history_text = self._format_conversation_history(conversation_history)
+        if not history_text:
+            return question.strip()
+
+        if mode == "gold":
+            instruction = "Hãy trả lời câu hỏi hiện tại về vàng SJC dựa trên ngữ cảnh hội thoại gần đây nếu người dùng đang hỏi tiếp."
+        else:
+            instruction = "Hãy trả lời câu hỏi hiện tại dựa trên ngữ cảnh hội thoại gần đây nếu có."
+
+        return (
+            f"{instruction}\n\n"
+            f"Ngữ cảnh hội thoại gần đây:\n{history_text}\n\n"
+            f"Câu hỏi hiện tại:\n{question.strip()}"
+        )
+
+    def _history_mentions_gold_context(self, conversation_history: Sequence[ChatTurn] | None = None) -> bool:
+        history_text = self._conversation_context_text("", conversation_history)
+        return bool(history_text) and self._is_gold_context_question(history_text)
+
+    def _is_contextual_follow_up_question(self, question: str) -> bool:
+        normalized = self._normalize_text(question)
+        if not normalized:
+            return False
+
+        words = normalized.split()
+        return len(words) <= 10 and self._matches_any_pattern(normalized, CONTEXT_DEPENDENT_PATTERNS)
+
+    def _should_use_gold_model(self, question: str, conversation_history: Sequence[ChatTurn] | None = None) -> bool:
+        if self._is_gold_context_question(question):
+            return True
+
+        if self._history_mentions_gold_context(conversation_history) and self._is_contextual_follow_up_question(question):
+            return True
+
+        return False
+
     def _format_trend_classification_answer(self, result: dict[str, object]) -> str:
         trend = str(result.get("predicted_trend", "Giảm"))
         up_probability = float(result.get("up_probability", 0.0))
@@ -253,9 +337,10 @@ class GoldAIService:
         normalized = self._normalize_text(question)
         return self._matches_any_pattern(normalized, GENERAL_CHAT_PATTERNS)
 
-    def _general_chat_response(self, question: str) -> str:
+    def _general_chat_response(self, question: str, conversation_history: Sequence[ChatTurn] | None = None) -> str:
         try:
-            response = self.general_chat_model.generate_content(question)
+            prompt = self._build_contextual_prompt(question, conversation_history, mode="general")
+            response = self.general_chat_model.generate_content(prompt)
             answer = self._sanitize_ai_text(getattr(response, "text", None))
             if answer:
                 return answer
@@ -494,9 +579,9 @@ class GoldAIService:
 
         return "\n".join(lines)
 
-    def fallback_agent(self, question: str):
-        if not self._is_gold_context_question(question):
-            return self._general_chat_response(question)
+    def fallback_agent(self, question: str, conversation_history: Sequence[ChatTurn] | None = None):
+        if not self._should_use_gold_model(question, conversation_history):
+            return self._general_chat_response(question, conversation_history)
 
         days = self._extract_days(question)
         if not self._load_dataset_if_available():
@@ -519,19 +604,20 @@ class GoldAIService:
 
         return answer.strip()
 
-    async def get_answer(self, question: str):
+    async def get_answer(self, question: str, conversation_history: Sequence[ChatTurn] | None = None):
         try:
-            if self._is_sensitive_backend_question(question):
+            if self._is_sensitive_backend_question(self._conversation_context_text(question, conversation_history)):
                 return self._safe_sensitive_response()
 
             direct_answer = self._direct_answer_for_question(question)
             if direct_answer is not None:
                 return direct_answer
 
-            if not self._is_gold_context_question(question):
-                return self._general_chat_response(question)
+            if not self._should_use_gold_model(question, conversation_history):
+                return self._general_chat_response(question, conversation_history)
 
-            response = self.gemini_model.generate_content(question)
+            prompt = self._build_contextual_prompt(question, conversation_history, mode="gold")
+            response = self.gemini_model.generate_content(prompt)
             
             # TÌM TẤT CẢ CÁC PARTS, XEM CÓ PART NÀO GỌI TOOL KHÔNG
             fc = None
@@ -562,8 +648,8 @@ class GoldAIService:
             if text_answer:
                 return text_answer
 
-            return self._general_chat_response(question)
+            return self._general_chat_response(question, conversation_history)
 
         except Exception as e:
             print(f"❌ Lỗi Gemini/Model: {e}") 
-            return self.fallback_agent(question)
+            return self.fallback_agent(question, conversation_history)

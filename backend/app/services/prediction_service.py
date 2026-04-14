@@ -73,9 +73,9 @@ class PredictionService:
             updated_at=now,
         )
 
-    def _resolve_model_or_fallback(self, identifier: str | None, prediction_kind: PredictionKind):
+    def _resolve_model_or_fallback(self, identifier: str | None, prediction_kind: PredictionKind, source: str | None = None):
         try:
-            model = resolve_prediction_model(self.db, identifier, prediction_kind)
+            model = resolve_prediction_model(self.db, identifier, prediction_kind, source=source)
             return model, ModelRead.model_validate(model)
         except SQLAlchemyError as exc:
             fallback_model = self._build_fallback_model_read(prediction_kind, identifier)
@@ -121,7 +121,7 @@ class PredictionService:
     def predict_price(self, *, days: int, model_identifier: str | None = None, source: str = "sjc", range_value: str | None = None) -> PricePredictionResponse:
         history_frame, normalized_source = load_history_for_source(source)
         history_frame = limit_history_frame(history_frame, range_value)
-        selected_model, selected_model_read = self._resolve_model_or_fallback(model_identifier, PredictionKind.price)
+        selected_model, selected_model_read = self._resolve_model_or_fallback(model_identifier, PredictionKind.price, source=normalized_source)
         strategy = self._model_strategy(selected_model)
         history_prices = history_frame["price"].tolist()
         predictions, used_fallback = forecast_price_path(
@@ -168,7 +168,7 @@ class PredictionService:
     def predict_trend(self, *, days: int, model_identifier: str | None = None, source: str = "sjc", range_value: str | None = None) -> TrendPredictionResponse:
         history_frame, normalized_source = load_history_for_source(source)
         history_frame = limit_history_frame(history_frame, range_value)
-        selected_model, selected_model_read = self._resolve_model_or_fallback(model_identifier, PredictionKind.trend)
+        selected_model, selected_model_read = self._resolve_model_or_fallback(model_identifier, PredictionKind.trend, source=normalized_source)
         strategy = self._model_strategy(selected_model)
         history_prices = history_frame["price"].tolist()
         trend_predictions, trend_scores, used_fallback = predict_trend_path(
@@ -196,7 +196,7 @@ class PredictionService:
             days=days,
             range_value=range_value,
             payload=payload,
-            trend_label=trend_predictions[-1] if trend_predictions else "flat",
+            trend_label=trend_predictions[0] if trend_predictions else "flat",
             used_fallback=used_fallback,
         )
 

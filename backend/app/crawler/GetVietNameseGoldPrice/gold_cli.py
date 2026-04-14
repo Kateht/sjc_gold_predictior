@@ -314,6 +314,17 @@ def _print_csv_summary(csv_path: str, *, label: str = "CSV summary") -> None:
         print(f"  - {col}: {pct:.3f}%")
 
 
+def _resolve_report_output_path(config: dict, start: date, end: date, report_output: str | None) -> Path:
+    if report_output:
+        path = Path(report_output).expanduser()
+        if not path.is_absolute():
+            path = (Path.cwd() / path).resolve()
+        return path
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return (Path(config["log_dir"]) / "reports" / f"crawler_report_{start:%Y%m%d}_{end:%Y%m%d}_{timestamp}.txt").resolve()
+
+
 def _prompt_bool(prompt: str, *, default: bool) -> bool:
     default_label = "Y" if default else "N"
     while True:
@@ -543,10 +554,33 @@ def cmd_pipeline(args: argparse.Namespace, config: dict) -> dict:
     return {"update": stats, "backfill": backfill_stats, "outputs": outputs}
 
 
-def cmd_report(args: argparse.Namespace, config: dict) -> None:
+def cmd_report(args: argparse.Namespace, config: dict) -> Path:
     start = _parse_date(args.start, default=_parse_date(str(config["default_start_date"])))
     end = _parse_date(args.end, default=date.today()) if args.end else date.today()
-    ug.report_missing_dates(start, end, csv_path=str(config["csv_path"]), cols=ug.ALL_COLS)
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        ug.report_missing_dates(start, end, csv_path=str(config["csv_path"]), cols=ug.ALL_COLS)
+
+    report_text = buffer.getvalue().strip()
+    report_path = _resolve_report_output_path(config, start, end, getattr(args, "report_output", None))
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+
+    report_lines = [
+        "Crawler audit report",
+        f"Generated at: {datetime.now().isoformat(timespec='seconds')}",
+        f"Source CSV: {config['csv_path']}",
+        f"Range: {start.strftime('%d/%m/%Y')} -> {end.strftime('%d/%m/%Y')}",
+        "",
+        report_text or "No report output available.",
+    ]
+    report_path.write_text("\n".join(report_lines).rstrip() + "\n", encoding="utf-8")
+
+    if report_text:
+        print(report_text)
+    else:
+        print("No report output available.")
+    print(f"Report file: {report_path}")
+    return report_path
 
 
 def cmd_update_final_uso(args: argparse.Namespace, config: dict) -> None:
@@ -737,6 +771,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("report", help="Report missing dates/values for a date range")
     sp.add_argument("--start", default=None, help=f"Start date ({DATE_HINT}); default=config")
     sp.add_argument("--end", default=None, help=f"End date ({DATE_HINT}); default=today")
+    sp.add_argument("--report-output", default=None, help="Write the audit report artifact to this path")
     sp.set_defaults(func=cmd_report)
 
     sp = sub.add_parser("final-uso", help="Update the daily final_uso_usd.csv dataset")

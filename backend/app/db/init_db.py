@@ -50,6 +50,8 @@ def seed_default_models(db: Session) -> None:
             "gru-price-v1": {"mae": None, "rmse": None, "mape": None, "r2": None},
         }
 
+    default_price_metrics = {"mae": None, "rmse": None, "mape": None, "r2": None}
+
     default_models = [
         {
             "code": "lstm-k10-price-v1",
@@ -58,7 +60,7 @@ def seed_default_models(db: Session) -> None:
             "provider": "artifact",
             "artifact_path": "app/models/lstm_k10.keras",
             "description": "Sequence model trained on a 10-step lookback window",
-            "config_json": {"lookback": 10},
+            "config_json": {"lookback": 10, "source": "sjc"},
             "metrics_json": dict(price_model_metrics["lstm-k10-price-v1"]),
             "is_default": True,
             "is_active": True,
@@ -70,8 +72,20 @@ def seed_default_models(db: Session) -> None:
             "provider": "artifact",
             "artifact_path": "app/models/best_gru.h5",
             "description": "Artifact-backed GRU model for price forecasting",
-            "config_json": {"strategy": "gru", "feature_count": 28, "lookback": 1},
+            "config_json": {"strategy": "gru", "feature_count": 28, "lookback": 1, "source": "sjc"},
             "metrics_json": dict(price_model_metrics["gru-price-v1"]),
+            "is_default": False,
+            "is_active": True,
+        },
+        {
+            "code": "world-price-v1",
+            "name": "World Gold Price Model",
+            "prediction_kind": "price",
+            "provider": "builtin",
+            "artifact_path": None,
+            "description": "Source-aware built-in forecast for world gold price history",
+            "config_json": {"strategy": "momentum", "source": "world"},
+            "metrics_json": dict(price_model_metrics.get("world-price-v1") or default_price_metrics),
             "is_default": False,
             "is_active": True,
         },
@@ -82,9 +96,21 @@ def seed_default_models(db: Session) -> None:
             "provider": "artifact",
             "artifact_path": "app/models/xgb_classifier_sjc.joblib",
             "description": "Artifact-backed XGBoost classifier for direction bias on the SJC series",
-            "config_json": {"feature_window": 1, "feature_count": 13, "strategy": "xgb_classifier"},
+            "config_json": {"feature_window": 1, "feature_count": 13, "strategy": "xgb_classifier", "source": "sjc"},
             "metrics_json": {"accuracy": None},
             "is_default": True,
+            "is_active": True,
+        },
+        {
+            "code": "world-trend-v1",
+            "name": "World Gold Trend Model",
+            "prediction_kind": "trend",
+            "provider": "builtin",
+            "artifact_path": None,
+            "description": "Source-aware built-in trend forecast for world gold history",
+            "config_json": {"strategy": "momentum", "source": "world"},
+            "metrics_json": {"accuracy": None},
+            "is_default": False,
             "is_active": True,
         },
     ]
@@ -300,23 +326,23 @@ def seed_default_dataset_sources(db: Session, admin_id: int | None = None) -> No
     sources = [
         {
             "code": "sjc-history-csv",
-            "name": "SJC Historical CSV",
+            "name": "SJC and World Data Historical CSV",
             "source_type": "csv",
             "csv_path": settings.LOCAL_DATASET_PATH,
             "source_url": None,
             "file_format": "csv",
-            "description": "Dataset lịch sử giá vàng SJC cho biểu đồ và dự báo",
+            "description": "Dataset lịch sử giá vàng SJC và các dữ liệu thế giới cho biểu đồ và dự báo",
             "is_default": True,
             "is_active": True,
         },
         {
             "code": "crawler-export-csv",
-            "name": "Crawler Export CSV",
+            "name": "VietNamese Historical Gold Price Export CSV",
             "source_type": "crawler",
             "csv_path": settings.CRAWLER_DATASET_PATH,
             "source_url": None,
             "file_format": "csv",
-            "description": "Dữ liệu CSV sinh ra từ crawler vàng",
+            "description": "Dữ liệu CSV sinh ra từ crawler vàng Việt Nam",
             "is_default": False,
             "is_active": True,
         },
@@ -329,7 +355,7 @@ def seed_default_dataset_sources(db: Session, admin_id: int | None = None) -> No
             "file_format": "csv",
             "description": "Dataset hợp nhất phục vụ feature engineering",
             "is_default": False,
-            "is_active": True,
+            "is_active": False,
         },
     ]
 

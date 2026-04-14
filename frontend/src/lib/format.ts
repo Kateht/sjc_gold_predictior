@@ -1,10 +1,10 @@
-const currencyVnd = new Intl.NumberFormat('vi-VN', {
+const currencyVnd = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'VND',
   maximumFractionDigits: 0,
 });
 
-const domesticPriceFormatter = new Intl.NumberFormat('vi-VN', {
+const domesticPriceFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
@@ -12,12 +12,12 @@ const compactNumber = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
-const dateFormatter = new Intl.DateTimeFormat('vi-VN', {
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'medium',
   timeStyle: 'short',
 });
 
-const shortDateFormatter = new Intl.DateTimeFormat('vi-VN', {
+const shortDateFormatter = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'medium',
 });
 
@@ -32,7 +32,7 @@ export function formatDomesticPrice(value?: number | null): string {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     return 'N/A';
   }
-  return `${domesticPriceFormatter.format(value)} triệu VND/lượng`;
+  return `${domesticPriceFormatter.format(value)} million VND/tael`;
 }
 
 export function formatUsd(value?: number | null): string {

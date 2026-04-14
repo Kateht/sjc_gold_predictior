@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   exportAdminHistoryCsv,
   exportDatasetCsv,
+  downloadCrawlerReport,
   fetchAdminDatasets,
   fetchAdminModels,
   fetchCrawlerRuns,
@@ -30,7 +31,7 @@ const initialCrawlerForm = {
 const crawlerTaskMeta = {
   report: {
     label: 'report (audit only)',
-    description: 'Inspect missing dates and missing values in the raw gold CSV. This task does not rewrite crawl data.',
+    description: 'Inspect missing dates and missing values in the raw gold CSV. This task writes a downloadable audit report and does not rewrite crawl data.',
     endDate: true,
   },
   update: {
@@ -206,6 +207,18 @@ export function AdminPage() {
     }
   }
 
+  async function handleCrawlerReportDownload(run: CrawlerRunRead) {
+    setBusy(`crawler-report-${run.id}`);
+    setError('');
+    try {
+      await downloadCrawlerReport(run.id);
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : 'Failed to download crawler report');
+    } finally {
+      setBusy('');
+    }
+  }
+
   function replaceCrawlerRun(updatedRun: CrawlerRunRead) {
     setRuns((current) => {
       const existingIndex = current.findIndex((run) => run.id === updatedRun.id);
@@ -240,8 +253,27 @@ export function AdminPage() {
 
     setActiveCrawlerRun(latestRun);
     setCrawlerProgress(100);
-    setCrawlerStatusMessage(latestRun.status === 'success' ? 'Crawler finished successfully.' : 'Crawler failed. Check the log output below.');
+    setCrawlerStatusMessage(
+      latestRun.status === 'success'
+        ? latestRun.task === 'report'
+          ? 'Report finished successfully. Download the audit report from the latest run card below.'
+          : 'Crawler finished successfully.'
+        : 'Crawler failed. Check the log output below.',
+    );
     await reloadAll();
+  }
+
+  function renderCrawlerReportAction(run: CrawlerRunRead) {
+    if (run.task !== 'report' || run.status !== 'success') {
+      return null;
+    }
+
+    const busyKey = `crawler-report-${run.id}`;
+    return (
+      <button type="button" className="button button--ghost" onClick={() => void handleCrawlerReportDownload(run)} disabled={busy === busyKey}>
+        {busy === busyKey ? 'Preparing...' : 'Download report'}
+      </button>
+    );
   }
 
   async function handleCrawlerSubmit(event: FormEvent<HTMLFormElement>) {
@@ -446,8 +478,22 @@ export function AdminPage() {
                   <span className={`badge ${latestRun.status === 'success' ? 'badge--positive' : latestRun.status === 'failed' ? 'badge--negative' : 'badge--neutral'}`}>{latestRun.status}</span>
                 </div>
                 <p>{formatDateTime(latestRun.created_at)}</p>
+                <div className="controls-row">{renderCrawlerReportAction(latestRun)}</div>
               </div>
             ) : null}
+          </div>
+
+          <div className="timeline-item">
+            <div className="timeline-item__head">
+              <div>
+                <strong>Before you run</strong>
+                <p className="section-title__meta">Read this checklist once so the task behaves the way you expect.</p>
+              </div>
+              <span className="badge badge--neutral">Guide</span>
+            </div>
+            <p>1. Use report when you only need an audit. It creates a downloadable text file and does not rewrite raw gold data.</p>
+            <p>2. Use update or pipeline when you want to refresh source data. The end date field only applies to tasks that support it.</p>
+            <p>3. After a successful report run, download the file from the latest run card or from the run history below.</p>
           </div>
 
           <form className="stack" onSubmit={handleCrawlerSubmit}>
@@ -516,6 +562,7 @@ export function AdminPage() {
                     <span className={`badge ${run.status === 'success' ? 'badge--positive' : run.status === 'failed' ? 'badge--negative' : 'badge--neutral'}`}>{run.status}</span>
                   </div>
                   <p>{formatDateTime(run.created_at)}</p>
+                  <div className="controls-row">{renderCrawlerReportAction(run)}</div>
                 </div>
               );
             })}

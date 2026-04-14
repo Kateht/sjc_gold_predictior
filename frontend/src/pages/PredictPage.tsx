@@ -5,7 +5,7 @@ import { formatMarketPrice, formatNumber } from '@/lib/format';
 import { getUserFacingModelLabel } from '@/lib/modelLabels';
 import { RichMessage } from '@/components/RichMessage';
 import { Sparkline } from '@/components/Sparkline';
-import type { ModelRead, PricePredictionResponse, TrendPredictionResponse } from '@/types';
+import type { AssistantConversationTurn, ModelRead, PricePredictionResponse, TrendPredictionResponse } from '@/types';
 
 const sourceOptions = [
   { value: 'sjc', label: 'SJC' },
@@ -21,10 +21,12 @@ const resultTabs: Array<{ value: 'chart' | 'timeline' | 'details'; label: string
 ];
 
 const assistantSuggestions = [
-  'Explain the current SJC spread',
-  'Why was the fallback model used?',
-  'What should I watch in the next 7 days?',
+  'Explain the result I just saw',
+  'Compare the active models',
+  'Continue the previous question',
 ];
+
+const MAX_CONTEXT_TURNS = 6;
 
 type ResultTab = (typeof resultTabs)[number]['value'];
 
@@ -36,6 +38,18 @@ interface ChatMessage {
 
 function pickDefaultModel(models: ModelRead[]): string {
   return models.find((model) => model.is_default)?.code ?? models[0]?.code ?? '';
+}
+
+function getTrendBadgeTone(label: string) {
+  if (label === 'up') {
+    return 'badge--positive';
+  }
+
+  if (label === 'down') {
+    return 'badge--negative';
+  }
+
+  return 'badge--neutral';
 }
 
 export function PredictPage() {
@@ -66,19 +80,40 @@ export function PredictPage() {
   const [priceHoverIndex, setPriceHoverIndex] = useState<number | null>(null);
   const [trendHoverIndex, setTrendHoverIndex] = useState<number | null>(null);
 
+  function buildConversationHistory(messages: ChatMessage[]): AssistantConversationTurn[] {
+    return messages
+      .filter((message) => message.content.trim())
+      .slice(-MAX_CONTEXT_TURNS)
+      .map((message) => ({ role: message.role, content: message.content }));
+  }
+
   useEffect(() => {
     let active = true;
 
+    setError('');
+    setResultTab('chart');
+    setPriceResult(null);
+    setTrendResult(null);
+    setPriceSelectedIndex(0);
+    setTrendSelectedIndex(0);
+    setPriceHoverIndex(null);
+    setTrendHoverIndex(null);
+    setPriceModel('');
+    setTrendModel('');
+
     async function loadModels() {
       try {
-        const [priceList, trendList] = await Promise.all([fetchModels('price', true), fetchModels('trend', true)]);
+        const [priceList, trendList] = await Promise.all([
+          fetchModels('price', true, source),
+          fetchModels('trend', true, source),
+        ]);
         if (!active) {
           return;
         }
         setPriceModels(priceList);
         setTrendModels(trendList);
-        setPriceModel((current) => current || pickDefaultModel(priceList));
-        setTrendModel((current) => current || pickDefaultModel(trendList));
+        setPriceModel((current) => (priceList.some((model) => model.code === current) ? current : pickDefaultModel(priceList)));
+        setTrendModel((current) => (trendList.some((model) => model.code === current) ? current : pickDefaultModel(trendList)));
       } catch (loadError) {
         if (active) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load models');
@@ -90,7 +125,7 @@ export function PredictPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [source]);
 
   useEffect(() => {
     if (priceResult?.predictions.length) {
@@ -140,13 +175,14 @@ export function PredictPage() {
       return;
     }
 
+    const conversationHistory = buildConversationHistory(assistantMessages);
     setAssistantLoading(true);
     setError('');
     setAssistantMessages((current) => [...current, { id: Date.now(), role: 'user', content: prompt }]);
     setAssistantQuestion('');
 
     try {
-      const answer = await askAssistant(prompt);
+      const answer = await askAssistant(prompt, conversationHistory);
       setAssistantMessages((current) => [...current, { id: Date.now() + 1, role: 'assistant', content: answer.answer }]);
     } catch (askError) {
       setError(askError instanceof Error ? askError.message : 'Assistant failed');
@@ -183,6 +219,7 @@ export function PredictPage() {
   const activeSelectedLabel = mode === 'price' ? formatMarketPrice(activeSelectedValue, activePriceSource) : formatNumber(activeSelectedValue);
   const activeSelectedDate = activeLabels[activePointIndex] ?? activeLabels[activeLabels.length - 1] ?? 'N/A';
   const activeSelectedTrend = mode === 'price' ? priceResult?.trend ?? 'trend' : trendResult?.trend_predictions[activePointIndex] ?? 'flat';
+  const activeSelectedTrendTone = mode === 'price' ? 'badge--neutral' : getTrendBadgeTone(activeSelectedTrend);
   const activeResultModel = mode === 'price' ? priceResult?.selected_model : trendResult?.selected_model;
   const activeUsedFallback = mode === 'price' ? priceResult?.used_fallback : trendResult?.used_fallback;
   const hasActiveResult = activeChartValues.length > 0;
@@ -308,6 +345,11 @@ export function PredictPage() {
                 ))}
               </div>
             </div>
+              {mode === 'trend' ? (
+                <p className="section-title__meta">
+                  Trend badges compare the first forecast point against today's actual price. Each later point is compared with the previous forecast point.
+                </p>
+              ) : null}
 
             {resultTab === 'chart' ? (
               <div className="prediction-chart">
@@ -326,11 +368,11 @@ export function PredictPage() {
                   <div>
                     <p className="eyebrow">{activePointModeLabel}</p>
                     <h4>{activeSelectedDate}</h4>
-                    <p>{mode === 'price' ? 'Hover or tap a dot or chip to inspect the forecast price.' : 'Hover or tap a dot or chip to inspect the trend confidence.'}</p>
+                    <p>{mode === 'price' ? 'Hover or tap a dot or chip to inspect the forecast price.' : 'Hover or tap a dot or chip to inspect the forecast direction.'}</p>
                   </div>
                   <div className="forecast-summary__value">
                     <strong>{activeSelectedLabel}</strong>
-                    <span className={`badge ${mode === 'price' ? 'badge--neutral' : activeSelectedTrend === 'up' ? 'badge--positive' : activeSelectedTrend === 'down' ? 'badge--negative' : 'badge--neutral'}`}>
+                    <span className={`badge ${mode === 'price' ? 'badge--neutral' : activeSelectedTrendTone}`}>
                       {mode === 'price' ? activeSelectedTrend : activeSelectedTrend}
                     </span>
                   </div>
@@ -341,7 +383,8 @@ export function PredictPage() {
             {resultTab === 'timeline' ? (
               <div className="forecast-strip">
                 {activeLabels.map((label, index) => {
-                  const tone = mode === 'price' ? 'badge--neutral' : activeChartValues[index] >= 0.5 ? 'badge--positive' : 'badge--neutral';
+                  const trendLabel = mode === 'trend' ? trendResult?.trend_predictions[index] ?? 'flat' : 'flat';
+                  const tone = mode === 'price' ? 'badge--neutral' : getTrendBadgeTone(trendLabel);
                   const pointValue = mode === 'price' ? formatMarketPrice(activeChartValues[index], activePriceSource) : formatNumber(activeChartValues[index]);
 
                   return (
@@ -381,7 +424,7 @@ export function PredictPage() {
                     >
                       <span>{label}</span>
                       <strong>{pointValue}</strong>
-                      <span className={`badge ${tone}`}>{mode === 'price' ? activeSelectedTrend : trendResult?.trend_predictions[index] ?? 'flat'}</span>
+                      <span className={`badge ${tone}`}>{mode === 'price' ? activeSelectedTrend : trendLabel}</span>
                     </button>
                   );
                 })}
@@ -488,7 +531,7 @@ export function PredictPage() {
         <div className="section-title">
           <div>
             <p className="eyebrow">AI assistant</p>
-            <h3>Chat-style fallback help for gold and the forecast window.</h3>
+            <h3>Chat-style help for gold and the forecast window, with follow-up context.</h3>
           </div>
           <span className="badge badge--neutral">Fallback ready</span>
         </div>
@@ -524,11 +567,11 @@ export function PredictPage() {
 
             <label className="field">
               <span>Message</span>
-              <textarea className="textarea textarea--chat" value={assistantQuestion} onChange={(event) => setAssistantQuestion(event.target.value)} placeholder="How will SJC move in 7 days?" />
+              <textarea className="textarea textarea--chat" value={assistantQuestion} onChange={(event) => setAssistantQuestion(event.target.value)} placeholder="Ask a free-form question about SJC, models, news, or history..." />
             </label>
 
             <div className="controls-row controls-row--space-between">
-              <span className="chat-composer__hint">Assistant answers are shown in a threaded bubble view.</span>
+              <span className="chat-composer__hint">You can ask follow-up questions without using the suggestion chips.</span>
               <button type="submit" className="button button--primary" disabled={assistantLoading}>
                 {assistantLoading ? 'Thinking...' : 'Send message'}
               </button>

@@ -214,7 +214,7 @@ export function DashboardPage() {
   const domesticPrice = overview?.domestic_gold.current_price_vnd;
   const worldPrice = overview?.world_gold.current_price_usd;
   const gap = overview?.arbitrage.gap_vnd;
-  const gapLabel = gap === undefined || gap === null ? 'N/A' : `${gap >= 0 ? '+' : ''}${gap.toLocaleString('vi-VN')} VND`;
+  const gapLabel = gap === undefined || gap === null ? 'N/A' : `${gap >= 0 ? '+' : ''}${gap.toLocaleString('en-US')} VND`;
   const chartPointCount = visibleChart.prices.length;
   const latestChartPrice = chartPointCount ? visibleChart.prices[chartPointCount - 1] : null;
   const latestChartDate = chartPointCount ? visibleChart.dates[chartPointCount - 1] : 'Recent';
@@ -247,7 +247,7 @@ export function DashboardPage() {
       ]
     : [];
   const compareSpreadLabel = visibleChart.mode === 'compare' && visibleChart.sjcPrices[chartActiveIndex] !== undefined && visibleChart.worldPrices[chartActiveIndex] !== undefined
-    ? `Spread: ${(visibleChart.sjcPrices[chartActiveIndex] - visibleChart.worldPrices[chartActiveIndex]).toLocaleString('vi-VN')} VND`
+    ? `Spread: ${(visibleChart.sjcPrices[chartActiveIndex] - visibleChart.worldPrices[chartActiveIndex]).toLocaleString('en-US')} VND`
     : null;
 
   return (
@@ -411,8 +411,8 @@ export function DashboardPage() {
                 onPointHover={setChartHoverIndex}
               />
               <div className="chip-row chip-row--tight">
-                <span className="badge badge--neutral">Line vàng: SJC</span>
-                <span className="badge badge--neutral">Line xanh: World</span>
+                <span className="badge badge--neutral">SJC line</span>
+                <span className="badge badge--neutral">World line</span>
                 {/* {compareSpreadLabel ? <span className="badge badge--neutral">{compareSpreadLabel}</span> : null} */}
               </div>
             </div>

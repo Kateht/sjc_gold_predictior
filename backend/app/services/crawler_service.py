@@ -32,7 +32,12 @@ def get_crawler_run(db: Session, run_id: int) -> CrawlerRun | None:
     return db.get(CrawlerRun, run_id)
 
 
-def _build_crawler_command(payload: CrawlerRunCreate) -> list[str]:
+def _build_report_output_path(run_id: int) -> Path:
+    reports_dir = Path(settings.GOLD_CLI_CONFIG_PATH).resolve().parent / "logs" / "reports"
+    return (reports_dir / f"crawler_report_run_{run_id}.txt").resolve()
+
+
+def _build_crawler_command(payload: CrawlerRunCreate, *, report_output_path: str | None = None) -> list[str]:
     command = [
         sys.executable,
         "-m",
@@ -58,6 +63,8 @@ def _build_crawler_command(payload: CrawlerRunCreate) -> list[str]:
             command.extend(["--sleep", str(payload.sleep)])
         if payload.quiet:
             command.append("--quiet")
+    elif payload.task.value == "report" and report_output_path:
+        command.extend(["--report-output", report_output_path])
 
     return command
 
@@ -79,8 +86,16 @@ def _run_crawler_task_in_background(run_id: int, payload_data: dict[str, Any]) -
         run.started_at = datetime.now(timezone.utc)
         db.commit()
 
+        command_payload = _serialize_payload(payload)
+        report_output_path: Path | None = None
+        if payload.task.value == "report":
+            report_output_path = _build_report_output_path(run.id)
+            command_payload["report_output_path"] = str(report_output_path)
+            run.params_json = command_payload
+            db.commit()
+
         completed = subprocess.run(
-            _build_crawler_command(payload),
+            _build_crawler_command(payload, report_output_path=str(report_output_path) if report_output_path else None),
             cwd=str(Path(settings.PROJECT_ROOT)),
             capture_output=True,
             text=True,
