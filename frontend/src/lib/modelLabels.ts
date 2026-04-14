@@ -2,7 +2,7 @@ import type { ModelRead } from '@/types';
 
 const friendlyLabels: Record<string, string> = {
   'best-xgb-price-v1': 'Legacy price forecast',
-  'gru-price-v1': 'Best GRU price forecast',
+  'gru-price-1': 'Best GRU price forecast',
   'sjc-classification-v1': 'SJC direction classifier',
   'lstm-k10-price-v1': 'LSTM K10 price forecast',
 };
