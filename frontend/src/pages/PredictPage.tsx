@@ -235,6 +235,7 @@ export function PredictPage() {
                 </option>
               ))}
             </select>
+            <span className="chat-composer__hint">Counts backward from today when you click Predict.</span>
           </label>
 
           <label className="field">

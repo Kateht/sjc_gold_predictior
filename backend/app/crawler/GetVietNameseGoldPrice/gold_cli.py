@@ -44,6 +44,19 @@ DEFAULT_CONFIG = {
     "final_uso_with_vn_gold_vnd_thousand_imputed_csv": str(ROOT_DIR / "final_uso_with_vn_gold_vnd_thousand_imputed.csv"),
 }
 
+INTERACTIVE_TASK_MENU = [
+    ("1", "Update raw gold CSV", "crawl PNJ/SJC data for a date range"),
+    ("2", "Refresh XAUUSD cache", "download/update the Stooq XAU/USD cache only"),
+    ("3", "Update + refresh cache", "crawl raw gold first, then refresh XAUUSD cache"),
+    ("4", "Full pipeline", "crawl raw gold, refresh cache, and build merged outputs"),
+    ("5", "Update final_uso_usd", "build the market feature dataset used downstream"),
+    ("6", "Build final_dataset", "build the ML-ready dataset from raw gold + macro data"),
+    ("7", "Report missing data", "inspect gaps without rewriting the CSV"),
+    ("8", "Print config", "show the loaded JSON config"),
+    ("9", "Print paths", "show current file paths"),
+    ("0", "Exit", "quit the crawler menu"),
+]
+
 
 @dataclass(frozen=True)
 class BackfillStats:
@@ -566,19 +579,18 @@ def interactive(config: dict) -> None:
     _print_paths(config)
     print("Nhấn Ctrl+C bất kỳ lúc nào để dừng an toàn (có checkpoint/save).\n")
 
+    start_prompt_defaults = {
+        "2": "blank=toàn bộ file",
+        "5": "10/04/2006",
+        "6": "01/01/2009",
+    }
+    choices_with_end = {"1", "2", "5", "6", "7"}
+
     while True:
         try:
             print("Chọn tác vụ:")
-            print("  1) Update (crawl) theo khoảng ngày")
-            print("  2) Refresh XAUUSD cache trong stooq_cache")
-            print("  3) Update + refresh XAUUSD cache đến hôm nay")
-            print("  4) Pipeline đầy đủ (update + refresh + merge)")
-            print("  5) Update final_uso_usd.csv")
-            print("  6) Build final_dataset.csv")
-            print("  7) Report missing trong khoảng ngày")
-            print("  8) In config hiện tại")
-            print("  9) In lại đường dẫn file")
-            print("  0) Thoát")
+            for key, title, description in INTERACTIVE_TASK_MENU:
+                print(f"  {key}) {title} - {description}")
             choice = input("Nhập lựa chọn: ").strip()
 
             if choice == "0":
@@ -591,11 +603,11 @@ def interactive(config: dict) -> None:
                 continue
 
             if choice in {"1", "2", "3", "4", "5", "6", "7"}:
-                default_start_text = "01/01/2009" if choice == "6" else config["default_start_date"]
+                default_start_text = start_prompt_defaults.get(choice, config["default_start_date"])
                 start_text = input(f"Start date ({DATE_HINT}) (default {default_start_text}): ").strip()
                 start_value = start_text if start_text else None
                 end_value = None
-                if choice in {"1", "2", "7"}:
+                if choice in choices_with_end:
                     end_text = input(f"End date ({DATE_HINT}) (blank=today): ").strip()
                     end_value = end_text if end_text else None
 

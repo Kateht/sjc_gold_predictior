@@ -22,12 +22,12 @@ const defaultSuggestions = [
 const routeSuggestions: Record<string, string[]> = {
   '/': [
     'Dự báo giá vàng SJC trong 7 ngày tới (LSTM)',
-    'Dùng mô hình XGBoost để đoán giá vàng 5 ngày tới',
+    'Dự báo giá vàng SJC 5 ngày tới',
     'Xu hướng giá vàng ngày mai là tăng hay giảm? (Classification)',
   ],
   '/predict': [
     'Dự báo giá vàng SJC trong 7 ngày tới (LSTM)',
-    'Dùng mô hình XGBoost để đoán giá vàng 5 ngày tới',
+    'Dự báo giá vàng SJC 5 ngày tới',
     'Xu hướng giá vàng ngày mai là tăng hay giảm? (Classification)',
   ],
   '/news': ['Tin tức nào đáng chú ý nhất?', 'Nhóm tin nào đang tác động mạnh tới vàng?', 'Có headline nào về lãi suất không?'],

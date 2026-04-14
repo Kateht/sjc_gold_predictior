@@ -6,42 +6,42 @@
         <mxCell id="1" parent="0" />
 
         <!-- Title -->
-        <mxCell id="title" value="KIẾN TRÚC TỔNG THỂ ỨNG DỤNG DỰ BÁO GIÁ VÀNG" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=0;fontStyle=1;fontSize=18;fontColor=#1F2A37;" vertex="1" parent="1">
+        <mxCell id="title" value="OVERALL ARCHITECTURE OF THE GOLD PREDICTION APPLICATION" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=0;fontStyle=1;fontSize=18;fontColor=#1F2A37;" vertex="1" parent="1">
           <mxGeometry x="40" y="20" width="1080" height="40" as="geometry" />
         </mxCell>
 
         <!-- Main flow blocks -->
-        <mxCell id="user" value="Người dùng&#xa;Tương tác (UI)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#94A3B8;fontColor=#0F172A;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="user" value="User&#xa;Interacts with the UI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#94A3B8;fontColor=#0F172A;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="60" y="170" width="170" height="70" as="geometry" />
         </mxCell>
 
-        <mxCell id="fe" value="Frontend Web (Giao diện)&#xa;Hiển thị biểu đồ, dự báo, tin tức" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEF2FF;strokeColor=#6366F1;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="fe" value="Frontend Web (UI)&#xa;Shows charts, forecasts, and news" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEF2FF;strokeColor=#6366F1;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="290" y="160" width="250" height="90" as="geometry" />
         </mxCell>
 
-        <mxCell id="be" value="Backend API (Xử lý nghiệp vụ)&#xa;Điều phối dữ liệu và dự báo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFEFF;strokeColor=#06B6D4;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="be" value="Backend API (Business Logic)&#xa;Coordinates data and predictions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFEFF;strokeColor=#06B6D4;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="590" y="160" width="260" height="90" as="geometry" />
         </mxCell>
 
         <!-- Right-side supporting components -->
-        <mxCell id="db" value="Cơ sở dữ liệu&#xa;Lưu giá, dự báo, người dùng" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="db" value="Database&#xa;Stores prices, forecasts, and users" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="920" y="110" width="220" height="80" as="geometry" />
         </mxCell>
 
-        <mxCell id="model" value="Mô hình dự báo&#xa;Sinh dự báo giá / xu hướng" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#F97316;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="model" value="Forecast Models&#xa;Generate price and trend predictions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#F97316;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="920" y="210" width="220" height="80" as="geometry" />
         </mxCell>
 
-        <mxCell id="crawler" value="Crawler dữ liệu&#xa;Thu thập &amp; cập nhật dữ liệu" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#F59E0B;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="crawler" value="Data Crawler&#xa;Collects &amp; refreshes data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFBEB;strokeColor=#F59E0B;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="920" y="310" width="220" height="80" as="geometry" />
         </mxCell>
 
-        <mxCell id="assistant" value="AI Assistant (Hỏi đáp)&#xa;Tổng hợp &amp; trả lời câu hỏi" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF2F8;strokeColor=#EC4899;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
+        <mxCell id="assistant" value="AI Assistant (Q&amp;A)&#xa;Summarizes and answers questions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF2F8;strokeColor=#EC4899;fontColor=#111827;align=center;verticalAlign=middle;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="920" y="410" width="220" height="80" as="geometry" />
         </mxCell>
 
         <!-- Edges -->
-        <mxCell id="e_user_fe" value="Tương tác (UI)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="user" target="fe">
+        <mxCell id="e_user_fe" value="UI interaction" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="user" target="fe">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
@@ -49,23 +49,23 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="e_be_db" value="Đọc/Ghi dữ liệu" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="be" target="db">
+        <mxCell id="e_be_db" value="Read / Write data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="be" target="db">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="e_be_model" value="Tính toán dự báo" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="be" target="model">
+        <mxCell id="e_be_model" value="Run prediction" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="be" target="model">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="e_be_crawler" value="Thu thập/Cập nhật dữ liệu" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="be" target="crawler">
+        <mxCell id="e_be_crawler" value="Collect / refresh data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="be" target="crawler">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="e_be_assistant" value="Hỏi đáp, tổng hợp" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="be" target="assistant">
+        <mxCell id="e_be_assistant" value="Q&amp;A and summarization" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#334155;fontColor=#334155;" edge="1" parent="1" source="be" target="assistant">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="e_crawler_db" value="Lưu dữ liệu mới" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748B;fontColor=#64748B;dashed=1;" edge="1" parent="1" source="crawler" target="db">
+        <mxCell id="e_crawler_db" value="Store new data" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#64748B;fontColor=#64748B;dashed=1;" edge="1" parent="1" source="crawler" target="db">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
@@ -73,22 +73,22 @@
         <mxCell id="legend_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#CBD5E1;" vertex="1" parent="1">
           <mxGeometry x="60" y="560" width="420" height="200" as="geometry" />
         </mxCell>
-        <mxCell id="legend_title" value="Chú giải" style="text;html=1;align=left;verticalAlign=middle;resizable=0;fontStyle=1;fontSize=13;fontColor=#0F172A;" vertex="1" parent="1">
+        <mxCell id="legend_title" value="Legend" style="text;html=1;align=left;verticalAlign=middle;resizable=0;fontStyle=1;fontSize=13;fontColor=#0F172A;" vertex="1" parent="1">
           <mxGeometry x="80" y="575" width="180" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="legend_1" value="Luồng chính: Người dùng → Frontend → Backend" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
+        <mxCell id="legend_1" value="Main flow: User → Frontend → Backend" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
           <mxGeometry x="80" y="605" width="380" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="legend_2" value="Luồng dữ liệu: Backend ↔ Cơ sở dữ liệu" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
+        <mxCell id="legend_2" value="Data flow: Backend ↔ Database" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
           <mxGeometry x="80" y="630" width="380" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="legend_3" value="Luồng dự báo: Backend → Mô hình dự báo" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
+        <mxCell id="legend_3" value="Prediction flow: Backend → Forecast Models" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
           <mxGeometry x="80" y="655" width="380" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="legend_4" value="Luồng cập nhật: Backend → Crawler → Cơ sở dữ liệu (nét đứt)" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
+        <mxCell id="legend_4" value="Refresh flow: Backend → Crawler → Database (dashed)" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
           <mxGeometry x="80" y="680" width="380" height="20" as="geometry" />
         </mxCell>
-        <mxCell id="legend_5" value="Luồng hỏi đáp: Backend → AI Assistant" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
+        <mxCell id="legend_5" value="Q&amp;A flow: Backend → AI Assistant" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontColor=#334155;" vertex="1" parent="1">
           <mxGeometry x="80" y="705" width="380" height="20" as="geometry" />
         </mxCell>
 

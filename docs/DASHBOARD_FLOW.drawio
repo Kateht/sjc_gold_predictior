@@ -1,0 +1,46 @@
+<mxfile host="app.diagrams.net" modified="2026-04-13T00:00:00.000Z" agent="codex" version="24.7.8">
+  <diagram id="dashboard-flow" name="Dashboard Flow">
+    <mxGraphModel dx="1280" dy="720" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1280" pageHeight="720" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="DASHBOARD DISPLAY FLOW" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=18;fontColor=#0F172A;" vertex="1" parent="1">
+          <mxGeometry x="80" y="20" width="1120" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="u1" value="User opens the dashboard" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#94A3B8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="60" y="170" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="fe" value="Dashboard UI&#xa;Overview, chart, models, and news" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEF2FF;strokeColor=#6366F1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="290" y="160" width="210" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="api" value="Backend API&#xa;/overview, /price-chart, /models, /news" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFEFF;strokeColor=#06B6D4;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="550" y="160" width="250" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="s1" value="SJC source" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#F59E0B;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="860" y="105" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" value="World source" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EFF6FF;strokeColor=#3B82F6;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1050" y="105" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ov" value="Metrics cards&#xa;Domestic, World, Gap, Last updated" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FDF4;strokeColor=#22C55E;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="860" y="195" width="360" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="ch" value="Compare chart&#xa;Yellow line = SJC&#xa;Blue line = World" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF2F8;strokeColor=#EC4899;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="860" y="305" width="360" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="extra" value="Supporting sections&#xa;Active models, News, History, Admin" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#94A3B8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="550" y="330" width="250" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#64748B;" edge="1" parent="1" source="u1" target="fe"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#64748B;" edge="1" parent="1" source="fe" target="api"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#64748B;" edge="1" parent="1" source="api" target="s1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#64748B;" edge="1" parent="1" source="api" target="s2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#64748B;" edge="1" parent="1" source="api" target="ov"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#64748B;" edge="1" parent="1" source="ov" target="ch"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#64748B;" edge="1" parent="1" source="api" target="extra"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -286,7 +286,11 @@ def _feature_dataset_candidates(csv_path: str | Path | None = None) -> list[Path
     return deduped
 
 
-def load_feature_dataset_frame(csv_path: str | Path | None = None, required_columns: Iterable[str] | None = None) -> pd.DataFrame:
+def load_feature_dataset_frame(
+    csv_path: str | Path | None = None,
+    required_columns: Iterable[str] | None = None,
+    range_value: str | None = None,
+) -> pd.DataFrame:
     required = set(required_columns or [])
     last_error: Exception | None = None
 
@@ -298,6 +302,7 @@ def load_feature_dataset_frame(csv_path: str | Path | None = None, required_colu
             continue
 
         frame = _ensure_trend_feature_columns(frame)
+        frame = _limit_frame_by_range(frame, range_value)
 
         if required and not required.issubset(set(frame.columns)):
             last_error = ValueError(f"Missing required feature columns in {candidate}")
@@ -307,8 +312,41 @@ def load_feature_dataset_frame(csv_path: str | Path | None = None, required_colu
     raise FileNotFoundError("No usable feature dataset CSV was found") from last_error
 
 
-def load_feature_prediction_data(csv_path: str | Path | None = None, required_columns: Iterable[str] | None = None):
-    frame = load_feature_dataset_frame(csv_path=csv_path, required_columns=required_columns)
+def _limit_frame_by_range(frame: pd.DataFrame, range_value: str | None, *, date_column: str = "date") -> pd.DataFrame:
+    if frame.empty or date_column not in frame.columns:
+        return frame.reset_index(drop=True)
+
+    working = frame.copy()
+    working[date_column] = pd.to_datetime(working[date_column], errors="coerce", utc=True)
+    working[date_column] = working[date_column].dt.tz_convert(None)
+    working = working.dropna(subset=[date_column]).sort_values(date_column).reset_index(drop=True)
+    if working.empty:
+        return working
+
+    days = _resolve_history_window_days(range_value)
+    anchor_date = pd.Timestamp.utcnow().normalize()
+    if anchor_date.tzinfo is not None:
+        anchor_date = anchor_date.tz_convert(None)
+    if getattr(anchor_date, "tzinfo", None) is not None:
+        anchor_date = anchor_date.tz_localize(None)
+    working = working[working[date_column] <= anchor_date]
+
+    if days is None:
+        return working.reset_index(drop=True)
+
+    start_date = anchor_date - pd.Timedelta(days=days - 1)
+    filtered = working[working[date_column] >= start_date]
+    if filtered.empty:
+        return working.tail(days).reset_index(drop=True)
+    return filtered.reset_index(drop=True)
+
+
+def load_feature_prediction_data(
+    csv_path: str | Path | None = None,
+    required_columns: Iterable[str] | None = None,
+    range_value: str | None = None,
+):
+    frame = load_feature_dataset_frame(csv_path=csv_path, required_columns=required_columns, range_value=range_value)
     if "SJC" not in frame.columns:
         raise ValueError("Feature dataset must contain an SJC column")
 
@@ -364,7 +402,9 @@ def load_price_history_frame(source: str = "sjc") -> pd.DataFrame:
 
 
 def _resolve_history_window_days(range_value: str | None) -> int | None:
-    normalized = (range_value or "30d").strip().lower()
+    normalized = (range_value or "").strip().lower()
+    if not normalized:
+        return None
     if normalized in {"all", "max", "full"}:
         return None
 
@@ -381,13 +421,7 @@ def _resolve_history_window_days(range_value: str | None) -> int | None:
 
 
 def limit_history_frame(frame: pd.DataFrame, range_value: str | None) -> pd.DataFrame:
-    if frame.empty:
-        return frame
-
-    days = _resolve_history_window_days(range_value)
-    if days is None:
-        return frame.reset_index(drop=True)
-    return frame.tail(days).reset_index(drop=True)
+    return _limit_frame_by_range(frame, range_value)
 
 
 def build_future_dates(last_date: pd.Timestamp | datetime | str, days: int) -> list[str]:

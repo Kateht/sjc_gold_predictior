@@ -18,7 +18,7 @@ import { formatDateTime } from '@/lib/format';
 import type { CrawlerRunRead, DatasetSourceRead, ModelRead, UserRead } from '@/types';
 
 const initialCrawlerForm = {
-  task: 'report',
+  task: 'update',
   start: '',
   end: '',
   no_forward_fill: false,
@@ -26,6 +26,54 @@ const initialCrawlerForm = {
   sleep: '',
   quiet: true,
 };
+
+const crawlerTaskMeta = {
+  report: {
+    label: 'report (audit only)',
+    description: 'Inspect missing dates and missing values in the raw gold CSV. This task does not rewrite crawl data.',
+    endDate: true,
+  },
+  update: {
+    label: 'update (crawl raw gold)',
+    description: 'Main crawl task for PNJ and SJC raw data. Use this as the default refresh path.',
+    endDate: true,
+  },
+  pipeline: {
+    label: 'pipeline (full build)',
+    description: 'Run update, refresh the XAU/USD cache, and rebuild merged outputs.',
+    endDate: false,
+  },
+  'update-backfill': {
+    label: 'update-backfill (crawl + cache)',
+    description: 'Run update first, then refresh the XAU/USD cache.',
+    endDate: false,
+  },
+  'backfill-xauusd': {
+    label: 'backfill-xauusd (refresh cache)',
+    description: 'Refresh only the Stooq XAU/USD cache.',
+    endDate: true,
+  },
+  'final-uso': {
+    label: 'final-uso (market dataset)',
+    description: 'Build final_uso_usd.csv for downstream market features.',
+    endDate: true,
+  },
+  'final-dataset': {
+    label: 'final-dataset (ML dataset)',
+    description: 'Build the ML-ready final_dataset.csv from raw gold and macro data.',
+    endDate: true,
+  },
+} as const;
+
+type CrawlerTaskKey = keyof typeof crawlerTaskMeta;
+
+function getCrawlerTaskMeta(task: string) {
+  return crawlerTaskMeta[task as CrawlerTaskKey] ?? {
+    label: task,
+    description: 'This crawler task is not listed in the current UI task catalog.',
+    endDate: false,
+  };
+}
 
 const adminSections = [
   { value: 'overview', label: 'Overview' },
@@ -59,6 +107,9 @@ export function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+
+  const selectedCrawlerTask = getCrawlerTaskMeta(crawlerForm.task);
+  const crawlerTaskUsesEndDate = selectedCrawlerTask.endDate;
 
   async function reloadAll() {
     setLoading(true);
@@ -94,6 +145,12 @@ export function AdminPage() {
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [section]);
 
+  useEffect(() => {
+    if (!crawlerTaskUsesEndDate && crawlerForm.end) {
+      setCrawlerForm((current) => (current.end ? { ...current, end: '' } : current));
+    }
+  }, [crawlerTaskUsesEndDate, crawlerForm.end]);
+
   const filteredModels = useMemo(() => {
     if (modelFilter === 'all') {
       return models;
@@ -111,6 +168,7 @@ export function AdminPage() {
   }, [modelPage, modelPageCount]);
 
   const latestRun = activeCrawlerRun ?? runs[0] ?? null;
+  const latestRunTaskMeta = latestRun ? getCrawlerTaskMeta(latestRun.task) : null;
   const adminStats = {
     models: models.length,
     datasets: datasets.length,
@@ -194,7 +252,7 @@ export function AdminPage() {
       const run = await triggerCrawlerRun({
         task: crawlerForm.task,
         start: crawlerForm.start || undefined,
-        end: crawlerForm.end || undefined,
+        end: crawlerTaskUsesEndDate ? crawlerForm.end || undefined : undefined,
         no_forward_fill: crawlerForm.no_forward_fill,
         bfill_initial: crawlerForm.bfill_initial,
         sleep: crawlerForm.sleep ? Number(crawlerForm.sleep) : undefined,
@@ -381,7 +439,10 @@ export function AdminPage() {
             {latestRun ? (
               <div className="timeline-item timeline-item--button">
                 <div className="timeline-item__head">
-                  <strong>{latestRun.task}</strong>
+                  <div>
+                    <strong>{latestRunTaskMeta?.label ?? latestRun.task}</strong>
+                    <p className="section-title__meta">{latestRunTaskMeta?.description}</p>
+                  </div>
                   <span className={`badge ${latestRun.status === 'success' ? 'badge--positive' : latestRun.status === 'failed' ? 'badge--negative' : 'badge--neutral'}`}>{latestRun.status}</span>
                 </div>
                 <p>{formatDateTime(latestRun.created_at)}</p>
@@ -394,14 +455,15 @@ export function AdminPage() {
               <label className="field">
                 <span>Task</span>
                 <select className="select" value={crawlerForm.task} onChange={(event) => setCrawlerForm((current) => ({ ...current, task: event.target.value }))}>
-                  <option value="report">report</option>
-                  <option value="update">update</option>
-                  <option value="pipeline">pipeline</option>
-                  <option value="update-backfill">update-backfill</option>
-                  <option value="backfill-xauusd">backfill-xauusd</option>
-                  <option value="final-uso">final-uso</option>
-                  <option value="final-dataset">final-dataset</option>
+                  <option value="report">report (audit only)</option>
+                  <option value="update">update (crawl raw gold)</option>
+                  <option value="pipeline">pipeline (full build)</option>
+                  <option value="update-backfill">update-backfill (crawl + cache)</option>
+                  <option value="backfill-xauusd">backfill-xauusd (refresh cache)</option>
+                  <option value="final-uso">final-uso (market dataset)</option>
+                  <option value="final-dataset">final-dataset (ML dataset)</option>
                 </select>
+                <span className="section-title__meta">{selectedCrawlerTask.description}</span>
               </label>
               <label className="field">
                 <span>Sleep</span>
@@ -411,10 +473,17 @@ export function AdminPage() {
                 <span>Start</span>
                 <input className="input" type="date" value={crawlerForm.start} onChange={(event) => setCrawlerForm((current) => ({ ...current, start: event.target.value }))} />
               </label>
-              <label className="field">
-                <span>End</span>
-                <input className="input" type="date" value={crawlerForm.end} onChange={(event) => setCrawlerForm((current) => ({ ...current, end: event.target.value }))} />
-              </label>
+              {crawlerTaskUsesEndDate ? (
+                <label className="field">
+                  <span>End</span>
+                  <input className="input" type="date" value={crawlerForm.end} onChange={(event) => setCrawlerForm((current) => ({ ...current, end: event.target.value }))} />
+                </label>
+              ) : (
+                <div className="field">
+                  <span>End</span>
+                  <span className="section-title__meta">This task uses its own end-date logic and ignores the field.</span>
+                </div>
+              )}
             </div>
             <label className="controls-row" style={{ alignItems: 'center' }}>
               <input type="checkbox" checked={crawlerForm.quiet} onChange={(event) => setCrawlerForm((current) => ({ ...current, quiet: event.target.checked }))} />
@@ -434,15 +503,22 @@ export function AdminPage() {
           </form>
 
           <div className="timeline-list">
-            {runs.slice(0, 5).map((run) => (
-              <div key={run.id} className="timeline-item">
-                <div className="timeline-item__head">
-                  <strong>{run.task}</strong>
-                  <span className={`badge ${run.status === 'success' ? 'badge--positive' : run.status === 'failed' ? 'badge--negative' : 'badge--neutral'}`}>{run.status}</span>
+            {runs.slice(0, 5).map((run) => {
+              const taskMeta = getCrawlerTaskMeta(run.task);
+
+              return (
+                <div key={run.id} className="timeline-item">
+                  <div className="timeline-item__head">
+                    <div>
+                      <strong>{taskMeta.label}</strong>
+                      <p className="section-title__meta">{taskMeta.description}</p>
+                    </div>
+                    <span className={`badge ${run.status === 'success' ? 'badge--positive' : run.status === 'failed' ? 'badge--negative' : 'badge--neutral'}`}>{run.status}</span>
+                  </div>
+                  <p>{formatDateTime(run.created_at)}</p>
                 </div>
-                <p>{formatDateTime(run.created_at)}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </article>
       </section>

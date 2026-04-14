@@ -11,10 +11,10 @@
         </mxCell>
 
         <!-- Title -->
-        <mxCell id="title" value="ERD CƠ SỞ DỮ LIỆU (GOLD PREDICTION SYSTEM)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=0;fontStyle=1;fontSize=20;fontColor=#0F172A;" vertex="1" parent="1">
+        <mxCell id="title" value="DATABASE ERD (GOLD PREDICTION SYSTEM)" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=0;fontStyle=1;fontSize=20;fontColor=#0F172A;" vertex="1" parent="1">
           <mxGeometry x="60" y="20" width="1330" height="40" as="geometry" />
         </mxCell>
-        <mxCell id="subtitle" value="Nguồn: backend/alembic/versions/20260404_0001_initial_schema.py" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=0;fontSize=12;fontColor=#64748B;" vertex="1" parent="1">
+        <mxCell id="subtitle" value="Source: backend/alembic/versions/20260404_0001_initial_schema.py" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=0;fontSize=12;fontColor=#64748B;" vertex="1" parent="1">
           <mxGeometry x="60" y="55" width="1330" height="20" as="geometry" />
         </mxCell>
 
@@ -127,10 +127,10 @@
         </mxCell>
 
         <!-- Legend -->
-        <mxCell id="legend" value="Chú giải&#xa;PK: Khóa chính, FK: Khóa ngoại&#xa;1:N: Quan hệ một - nhiều&#xa;(null): Cột cho phép rỗng" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#CBD5E1;swimlaneFillColor=#F1F5F9;fontColor=#0F172A;spacingLeft=10;" vertex="1" parent="1">
+        <mxCell id="legend" value="Legend&#xa;PK: Primary key, FK: Foreign key&#xa;1:N: One-to-many relationship&#xa;(null): Nullable column" style="shape=swimlane;rounded=1;html=1;startSize=28;horizontal=0;swimlaneLine=0;fillColor=#FFFFFF;strokeColor=#CBD5E1;swimlaneFillColor=#F1F5F9;fontColor=#0F172A;spacingLeft=10;" vertex="1" parent="1">
           <mxGeometry x="1070" y="380" width="320" height="140" as="geometry" />
         </mxCell>
-        <mxCell id="legend_body" value="Dùng để đọc nhanh ERD trong báo cáo." style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#64748B;" vertex="1" parent="legend">
+        <mxCell id="legend_body" value="Use this to read the ERD quickly in the report." style="text;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=6;fontSize=11;fontColor=#64748B;" vertex="1" parent="legend">
           <mxGeometry x="0" y="28" width="320" height="112" as="geometry" />
         </mxCell>
 
