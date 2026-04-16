@@ -51,7 +51,7 @@ def _build_runtime_scaler(frame: pd.DataFrame, feature_columns: list[str]) -> Mi
     return scaler
 
 
-# --- Patch để xử lý version mismatch khi load model .h5 ---
+
 _original_dense_init = keras.layers.Dense.__init__
 
 def _patched_dense_init(self, *args, **kwargs):
@@ -59,13 +59,12 @@ def _patched_dense_init(self, *args, **kwargs):
     _original_dense_init(self, *args, **kwargs)
 
 keras.layers.Dense.__init__ = _patched_dense_init
-# --- End patch ---
 
 class GoldPredictionEngine:
     def __init__(self):
         feature_frame = load_feature_dataset_frame()
 
-        # Load models & scalers từ weights/ LSTM
+        
         self.meta = joblib.load(f"{settings.MODEL_DIR}/meta_lstm_k10.pkl")
         diff_frame, _, _ = load_feature_prediction_data(required_columns=set(self.meta["feature_columns"]) | {"SJC"})
         self.scaler_X = _build_runtime_scaler(diff_frame, list(self.meta["feature_columns"]))
@@ -88,8 +87,7 @@ class GoldPredictionEngine:
         
         self.best_k = self.meta["best_k"]
         self.feature_cols = self.meta["feature_columns"]
-        # 2. LOAD MODEL PHÂN LOẠI (DỰ ĐOÁN XU HƯỚNG)
-        # ======================================
+        #  LOAD MODEL PHÂN LOẠI (DỰ ĐOÁN XU HƯỚNG)
         self.trend_model_kind = "builtin"
         self.trend_model = None
         self.trend_scaler = None
@@ -129,7 +127,6 @@ class GoldPredictionEngine:
             self.clf_features = list(self.meta_clf.get("features") or [])
             self.clf_time_steps = int(self.meta_clf.get("time_steps", 21))
             if not self.clf_features:
-                # meta.pkl is invalid / incompatible; don't crash the API server.
                 print(
                     "Warning: legacy classification metadata has no features; "
                     "skipping legacy trend model and using fallback."
@@ -172,7 +169,6 @@ class GoldPredictionEngine:
             # TẠO DÒNG MỚI ĐỂ TRƯỢT CỬA SỔ
             new_delta_row = np.zeros(len(self.feature_cols))
             
-            # SỬA Ở ĐÂY: Thêm câu lệnh if kiểm tra SJC
             if "SJC" in self.feature_cols:
                 target_idx = self.feature_cols.index("SJC")
                 new_delta_row[target_idx] = np.ravel(pred_delta_scaled)[0]
@@ -296,25 +292,20 @@ def _get_engine():
 
 
 def forecast_price_path(history_prices, days, strategy="default"):
-    """Forecast price path using the prediction engine."""
-    # Convert history_prices to the format expected by the engine
-    # Assuming history_prices is a list of prices
+
     if not history_prices:
         return []
     
-    # Create a simple dataframe from history prices
     import pandas as pd
     df = pd.DataFrame({"price": history_prices})
     df["date"] = pd.date_range(end=pd.Timestamp.now(), periods=len(history_prices), freq="D")
     
-    # Use the engine to predict
     engine = _get_engine()
     result = engine.predict_future(df, history_prices[-1], days)
     return result["predictions"]
 
 
 def classify_price_path(last_price, predicted_prices):
-    """Classify price trend from the predicted price path."""
     return summarize_price_path(last_price, predicted_prices)
 
 

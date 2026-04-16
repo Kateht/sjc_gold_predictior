@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from datetime import date
 
-from app.schemas.crawler import CrawlerRunCreate, CrawlerTask
+from app.schemas.crawler import CrawlerRunCreate, CrawlerStartMode, CrawlerTask
 from app.services.crawler_service import _build_crawler_command
 
 
@@ -48,3 +48,17 @@ class CrawlerServiceCommandTest(unittest.TestCase):
 
         self.assertIn("--report-output", command)
         self.assertIn("/tmp/crawler-report.txt", command)
+
+    def test_command_includes_log_file_and_start_mode(self) -> None:
+        payload = CrawlerRunCreate(
+            task=CrawlerTask.update,
+            start=date(2026, 4, 1),
+        )
+
+        payload.start_mode = CrawlerStartMode.nearest_data
+        command = _build_crawler_command(payload, log_file_path="/tmp/crawler-run.log")
+
+        self.assertIn("--log-file", command)
+        self.assertIn("/tmp/crawler-run.log", command)
+        self.assertIn("--start-mode", command)
+        self.assertIn("nearest-data", command)

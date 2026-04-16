@@ -17,6 +17,11 @@ class CrawlerTask(str, Enum):
     final_dataset = "final-dataset"
 
 
+class CrawlerStartMode(str, Enum):
+    selected = "selected"
+    nearest_data = "nearest-data"
+
+
 class CrawlerStatus(str, Enum):
     pending = "pending"
     running = "running"
@@ -28,6 +33,7 @@ class CrawlerRunCreate(BaseModel):
     task: CrawlerTask
     start: date | None = None
     end: date | None = None
+    start_mode: CrawlerStartMode = CrawlerStartMode.selected
     no_forward_fill: bool = False
     bfill_initial: bool = False
     sleep: float | None = None

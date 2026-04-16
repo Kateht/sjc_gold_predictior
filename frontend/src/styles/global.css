@@ -1419,6 +1419,87 @@ h4,
   background: rgba(255, 255, 255, 0.82);
 }
 
+.crawler-workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.crawler-workflow-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  text-align: left;
+  border-radius: 18px;
+  border: 1px solid rgba(19, 23, 34, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 236, 223, 0.86));
+  box-shadow: 0 12px 28px rgba(39, 28, 6, 0.05);
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.crawler-workflow-card:hover,
+.crawler-workflow-card.is-active {
+  transform: translateY(-2px);
+  border-color: rgba(201, 146, 29, 0.26);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 220, 152, 0.18));
+  box-shadow: 0 16px 34px rgba(39, 28, 6, 0.09);
+}
+
+.crawler-workflow-card__step {
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+}
+
+.crawler-workflow-card strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1rem;
+}
+
+.crawler-workflow-card p,
+.dataset-card__description {
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.dataset-summary-grid {
+  margin-bottom: 8px;
+}
+
+.dataset-catalog {
+  display: grid;
+  gap: 14px;
+}
+
+.dataset-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.82));
+  box-shadow: 0 14px 36px rgba(39, 28, 6, 0.06);
+}
+
+.dataset-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dataset-card__head strong {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1rem;
+}
+
+.dataset-card__meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .timeline-item__head {
   display: flex;
   align-items: center;
@@ -1551,7 +1632,8 @@ h4,
 
   .hero,
   .auth-panel,
-  .grid-2 {
+  .grid-2,
+  .crawler-workflow-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1592,6 +1674,11 @@ h4,
   .grid-3,
   .metric-grid--compact {
     grid-template-columns: 1fr;
+  }
+
+  .dataset-card__head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .section-title,

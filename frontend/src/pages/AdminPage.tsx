@@ -18,55 +18,199 @@ import {
 import { formatDateTime } from '@/lib/format';
 import type { CrawlerRunRead, DatasetSourceRead, ModelRead, UserRead } from '@/types';
 
+const MIN_CRAWLER_SLEEP_SECONDS = 5;
+
 const initialCrawlerForm = {
-  task: 'update',
+  task: 'report',
   start: '',
+  start_mode: 'selected',
   end: '',
   no_forward_fill: false,
   bfill_initial: false,
-  sleep: '',
+  sleep: String(MIN_CRAWLER_SLEEP_SECONDS),
   quiet: true,
 };
 
 const crawlerTaskMeta = {
   report: {
-    label: 'report (audit only)',
-    description: 'Inspect missing dates and missing values in the raw gold CSV. This task writes a downloadable audit report and does not rewrite crawl data.',
+    label: '1. Dataset Report',
+    description: 'Audit every CSV data file and cache, showing each file\'s date range, continuity, freshness, and status.',
     endDate: true,
   },
   update: {
-    label: 'update (crawl raw gold)',
-    description: 'Main crawl task for PNJ and SJC raw data. Use this as the default refresh path.',
+    label: '2. Update Vietnamese gold',
+    description: 'Refresh PNJ and SJC records, then refresh cache and rebuild outputs.',
     endDate: true,
-  },
-  pipeline: {
-    label: 'pipeline (full build)',
-    description: 'Run update, refresh the XAU/USD cache, and rebuild merged outputs.',
-    endDate: false,
-  },
-  'update-backfill': {
-    label: 'update-backfill (crawl + cache)',
-    description: 'Run update first, then refresh the XAU/USD cache.',
-    endDate: false,
   },
   'backfill-xauusd': {
-    label: 'backfill-xauusd (refresh cache)',
-    description: 'Refresh only the Stooq XAU/USD cache.',
-    endDate: true,
-  },
-  'final-uso': {
-    label: 'final-uso (market dataset)',
-    description: 'Build final_uso_usd.csv for downstream market features.',
+    label: '3. Update world gold and market dataset',
+    description: 'Refresh the XAU/USD cache, then rebuild the market dataset outputs.',
     endDate: true,
   },
   'final-dataset': {
-    label: 'final-dataset (ML dataset)',
-    description: 'Build the ML-ready final_dataset.csv from raw gold and macro data.',
+    label: '4. Build ML training dataset',
+    description: 'Run tasks 2 and 3, then build final_dataset.csv and its .bak mirror while preserving history.',
     endDate: true,
   },
 } as const;
 
+const crawlerWorkflowCards = [
+  {
+    task: 'report',
+    title: '1. Dataset Report',
+    description: 'Audit every CSV file and cache with its own date range and status.',
+  },
+  {
+    task: 'final-dataset',
+    title: '1. Build ML training dataset',
+    description: 'Run the full chain: Vietnamese gold, world gold, market dataset, and final training data.',
+  },
+  {
+    task: 'update',
+    title: '2. Update Vietnamese gold',
+    description: 'Refresh PNJ and SJC records, then refresh cache and outputs.',
+  },
+  {
+    task: 'backfill-xauusd',
+    title: '3. Update world gold and market dataset',
+    description: 'Refresh the XAU/USD cache and rebuild the market dataset outputs.',
+  },
+] as const;
+
+const crawlerStartModeOptions = [
+  {
+    value: 'selected',
+    label: 'Use exact start date',
+    description: 'Run exactly from the date you entered.',
+  },
+  {
+    value: 'nearest-data',
+    label: 'Start from nearest available date',
+    description: 'Move forward to the first available date on or after your selection.',
+  },
+] as const;
+
 type CrawlerTaskKey = keyof typeof crawlerTaskMeta;
+type CrawlerStartModeValue = (typeof crawlerStartModeOptions)[number]['value'];
+
+function normalizeCrawlerSleepValue(value: string): number {
+  if (!value.trim()) {
+    return MIN_CRAWLER_SLEEP_SECONDS;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return MIN_CRAWLER_SLEEP_SECONDS;
+  }
+
+  return Math.max(MIN_CRAWLER_SLEEP_SECONDS, parsed);
+}
+
+function readCrawlerDateValue(value: unknown): Date | null {
+  if (typeof value !== 'string' || !value.trim()) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function readCrawlerParams(params: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  return params && typeof params === 'object' ? params : {};
+}
+
+function parseCrawlerProgressDate(outputText: string): Date | null {
+  const matches = [...outputText.matchAll(/Crawling\s+(\d{2}\/\d{2}\/\d{4})/g), ...outputText.matchAll(/current\s+(\d{2}\/\d{2}\/\d{4})/g)];
+  if (!matches.length) {
+    return null;
+  }
+
+  const latest = matches[matches.length - 1]?.[1];
+  if (!latest) {
+    return null;
+  }
+
+  const [day, month, year] = latest.split('/').map((part) => Number(part));
+  if (!day || !month || !year) {
+    return null;
+  }
+
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function inferCrawlerEndDate(task: string, params: Record<string, unknown>): Date | null {
+  const explicitEnd = readCrawlerDateValue(params.end);
+  if (explicitEnd) {
+    return explicitEnd;
+  }
+
+  if (['update', 'update-backfill', 'pipeline', 'report', 'final-uso', 'final-dataset', 'backfill-xauusd'].includes(task)) {
+    return new Date();
+  }
+
+  return null;
+}
+
+function estimateCrawlerProgress(run: CrawlerRunRead): number {
+  if (run.status === 'success' || run.status === 'failed') {
+    return 100;
+  }
+
+  const outputText = run.output_text ?? '';
+  const explicitProgressMatches = [...outputText.matchAll(/Progress:\s*(\d{1,3})%/gi)].map((match) => Number(match[1])).filter((value) => Number.isFinite(value));
+  let progress = run.status === 'running' ? 10 : 5;
+
+  if (explicitProgressMatches.length) {
+    progress = Math.max(progress, Math.max(...explicitProgressMatches));
+  }
+
+  const params = readCrawlerParams(run.params_json);
+  const startDate = readCrawlerDateValue(params.start);
+  const endDate = inferCrawlerEndDate(run.task, params);
+  const latestLogDate = parseCrawlerProgressDate(outputText);
+  if (startDate && endDate && latestLogDate) {
+    const totalDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000) + 1);
+    const processedDays = Math.max(0, Math.min(totalDays, Math.round((latestLogDate.getTime() - startDate.getTime()) / 86_400_000) + 1));
+    const rangeProgress = 5 + (processedDays / totalDays) * 85;
+    progress = Math.max(progress, Math.round(rangeProgress));
+  }
+
+  if (/XAUUSD cache refreshed/i.test(outputText) || /XAUUSD cache refresh complete/i.test(outputText)) {
+    progress = Math.max(progress, 80);
+  }
+
+  if (/Pipeline outputs:/i.test(outputText)) {
+    progress = Math.max(progress, 92);
+  }
+
+  if (/final_uso_usd\.csv complete/i.test(outputText) || /Updated final_uso_usd\.csv:/i.test(outputText)) {
+    progress = Math.max(progress, 95);
+  }
+
+  if (/final_dataset\.csv complete/i.test(outputText) || /Built final_dataset\.csv:/i.test(outputText)) {
+    progress = Math.max(progress, 95);
+  }
+
+  return Math.min(99, Math.max(5, Math.round(progress)));
+}
+
+function getCrawlerStatusMessage(run: CrawlerRunRead): string {
+  if (run.status === 'success') {
+    return run.task === 'report' ? 'Audit report finished successfully.' : 'Crawler finished successfully.';
+  }
+
+  if (run.status === 'failed') {
+    return 'Crawler failed. Check the log output below.';
+  }
+
+  const outputText = run.output_text ?? '';
+  if (outputText.includes('Progress:') || outputText.includes('Crawling ')) {
+    return 'Task is running and updating live status...';
+  }
+
+  return 'Task is queued and waiting for live updates...';
+}
 
 function getCrawlerTaskMeta(task: string) {
   return crawlerTaskMeta[task as CrawlerTaskKey] ?? {
@@ -170,6 +314,9 @@ export function AdminPage() {
 
   const latestRun = activeCrawlerRun ?? runs[0] ?? null;
   const latestRunTaskMeta = latestRun ? getCrawlerTaskMeta(latestRun.task) : null;
+  const latestRunParams = readCrawlerParams(latestRun?.params_json);
+  const crawlerProgressValue = activeCrawlerRun ? estimateCrawlerProgress(activeCrawlerRun) : crawlerProgress;
+  const crawlerStatusText = activeCrawlerRun ? getCrawlerStatusMessage(activeCrawlerRun) : crawlerStatusMessage;
   const adminStats = {
     models: models.length,
     datasets: datasets.length,
@@ -235,28 +382,28 @@ export function AdminPage() {
 
   async function monitorCrawlerRun(initialRun: CrawlerRunRead) {
     setActiveCrawlerRun(initialRun);
-    setCrawlerProgress(initialRun.status === 'success' || initialRun.status === 'failed' ? 100 : 18);
-    setCrawlerStatusMessage(initialRun.status === 'success' ? 'Crawler completed successfully.' : 'Crawler queued. Waiting for progress updates...');
+    setCrawlerProgress(estimateCrawlerProgress(initialRun));
+    setCrawlerStatusMessage(getCrawlerStatusMessage(initialRun));
 
     let latestRun = initialRun;
     let attempts = 0;
 
-    while (!['success', 'failed'].includes(latestRun.status) && attempts < 24) {
+    while (!['success', 'failed'].includes(latestRun.status) && attempts < 180) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       latestRun = await fetchCrawlerRun(initialRun.id);
       replaceCrawlerRun(latestRun);
       setActiveCrawlerRun(latestRun);
       attempts += 1;
-      setCrawlerProgress((current) => Math.min(95, Math.max(current, 18 + attempts * 12)));
-      setCrawlerStatusMessage(latestRun.status === 'running' ? 'Crawler is running...' : 'Crawler is queued...');
+      setCrawlerProgress(estimateCrawlerProgress(latestRun));
+      setCrawlerStatusMessage(getCrawlerStatusMessage(latestRun));
     }
 
     setActiveCrawlerRun(latestRun);
-    setCrawlerProgress(100);
+    setCrawlerProgress(estimateCrawlerProgress(latestRun));
     setCrawlerStatusMessage(
       latestRun.status === 'success'
         ? latestRun.task === 'report'
-          ? 'Report finished successfully. Download the audit report from the latest run card below.'
+          ? 'Audit report finished successfully. Download it from the latest run card below.'
           : 'Crawler finished successfully.'
         : 'Crawler failed. Check the log output below.',
     );
@@ -281,13 +428,15 @@ export function AdminPage() {
     setBusy('crawler');
     setError('');
     try {
+      const sleepSeconds = normalizeCrawlerSleepValue(crawlerForm.sleep);
       const run = await triggerCrawlerRun({
         task: crawlerForm.task,
         start: crawlerForm.start || undefined,
+        start_mode: crawlerForm.start_mode,
         end: crawlerTaskUsesEndDate ? crawlerForm.end || undefined : undefined,
         no_forward_fill: crawlerForm.no_forward_fill,
         bfill_initial: crawlerForm.bfill_initial,
-        sleep: crawlerForm.sleep ? Number(crawlerForm.sleep) : undefined,
+        sleep: sleepSeconds,
         quiet: crawlerForm.quiet,
       });
       replaceCrawlerRun(run);
@@ -455,18 +604,32 @@ export function AdminPage() {
           <div className="section-title">
             <div>
               <p className="eyebrow">Crawler</p>
-              <h3>Kick off a backend crawler task</h3>
-              <p className="section-title__meta">The progress bar follows the live crawler run status until completion.</p>
+              <h3>Run crawler tasks with direct action names and safe delays</h3>
+              <p className="section-title__meta">Use the full run when you want Vietnamese gold, world gold, market outputs, and final training data rebuilt together.</p>
             </div>
+          </div>
+
+          <div className="crawler-workflow-grid">
+            {crawlerWorkflowCards.map((card) => {
+              const isActive = crawlerForm.task === card.task;
+
+              return (
+                <button key={card.task} type="button" className={`crawler-workflow-card ${isActive ? 'is-active' : ''}`} onClick={() => setCrawlerForm((current) => ({ ...current, task: card.task }))}>
+                  <span className="crawler-workflow-card__step">{card.title}</span>
+                  <strong>{getCrawlerTaskMeta(card.task).label}</strong>
+                  <p>{card.description}</p>
+                </button>
+              );
+            })}
           </div>
 
           <div className="progress-shell">
             <div className="progress-track" aria-label="Crawler progress">
-              <div className="progress-track__bar" style={{ width: `${crawlerProgress}%` }} />
+              <div className="progress-track__bar" style={{ width: `${crawlerProgressValue}%` }} />
             </div>
             <div className="controls-row controls-row--space-between">
-              <span className="section-title__meta">{crawlerStatusMessage || 'Ready to start a crawler run.'}</span>
-              <span className="badge badge--neutral">{crawlerProgress}%</span>
+              <span className="section-title__meta">{crawlerStatusText || 'Ready to start a crawler run.'}</span>
+              <span className="badge badge--neutral">{crawlerProgressValue}%</span>
             </div>
             {latestRun ? (
               <div className="timeline-item timeline-item--button">
@@ -474,6 +637,9 @@ export function AdminPage() {
                   <div>
                     <strong>{latestRunTaskMeta?.label ?? latestRun.task}</strong>
                     <p className="section-title__meta">{latestRunTaskMeta?.description}</p>
+                    <p className="section-title__meta">
+                      Start: {String(latestRunParams.start ?? 'n/a')} · Mode: {String(latestRunParams.start_mode ?? 'selected')}
+                    </p>
                   </div>
                   <span className={`badge ${latestRun.status === 'success' ? 'badge--positive' : latestRun.status === 'failed' ? 'badge--negative' : 'badge--neutral'}`}>{latestRun.status}</span>
                 </div>
@@ -486,14 +652,16 @@ export function AdminPage() {
           <div className="timeline-item">
             <div className="timeline-item__head">
               <div>
-                <strong>Before you run</strong>
-                <p className="section-title__meta">Read this checklist once so the task behaves the way you expect.</p>
+                <strong>Start mode and cache rules</strong>
+                <p className="section-title__meta">Use the start mode to either keep the chosen date or snap to the nearest available data date.</p>
               </div>
               <span className="badge badge--neutral">Guide</span>
             </div>
-            <p>1. Use report when you only need an audit. It creates a downloadable text file and does not rewrite raw gold data.</p>
-            <p>2. Use update or pipeline when you want to refresh source data. The end date field only applies to tasks that support it.</p>
-            <p>3. After a successful report run, download the file from the latest run card or from the run history below.</p>
+            <p>1. Use <strong>Dataset Report</strong> when you want to audit every CSV file and cache with its own range, continuity, freshness, and status.</p>
+            <p>2. Use <strong>Update Vietnamese gold</strong> for PNJ/SJC refreshes; cache and outputs are rebuilt automatically.</p>
+            <p>3. Use <strong>Update world gold and market dataset</strong> for the XAU/USD cache and market outputs.</p>
+            <p>4. Use <strong>Build ML training dataset</strong> when you want the full chain, including tasks 2 and 3, plus final_dataset.csv.</p>
+            <p>5. For crawl-heavy tasks, keep <strong>sleep at 5 seconds or more</strong>. Lower values increase the chance of request blocking.</p>
           </div>
 
           <form className="stack" onSubmit={handleCrawlerSubmit}>
@@ -501,23 +669,32 @@ export function AdminPage() {
               <label className="field">
                 <span>Task</span>
                 <select className="select" value={crawlerForm.task} onChange={(event) => setCrawlerForm((current) => ({ ...current, task: event.target.value }))}>
-                  <option value="report">report (audit only)</option>
-                  <option value="update">update (crawl raw gold)</option>
-                  <option value="pipeline">pipeline (full build)</option>
-                  <option value="update-backfill">update-backfill (crawl + cache)</option>
-                  <option value="backfill-xauusd">backfill-xauusd (refresh cache)</option>
-                  <option value="final-uso">final-uso (market dataset)</option>
-                  <option value="final-dataset">final-dataset (ML dataset)</option>
+                  <option value="report">1. Dataset Report</option>
+                  <option value="final-dataset">2. Build ML training dataset</option>
+                  <option value="update">3. Update Vietnamese gold</option>
+                  <option value="backfill-xauusd">4. Update world gold and market dataset</option>
                 </select>
                 <span className="section-title__meta">{selectedCrawlerTask.description}</span>
               </label>
               <label className="field">
-                <span>Sleep</span>
-                <input className="input" type="number" min="0" step="0.1" value={crawlerForm.sleep} onChange={(event) => setCrawlerForm((current) => ({ ...current, sleep: event.target.value }))} />
+                <span>Sleep between requests (seconds)</span>
+                <input className="input" type="number" min={MIN_CRAWLER_SLEEP_SECONDS} step="1" value={crawlerForm.sleep} onChange={(event) => setCrawlerForm((current) => ({ ...current, sleep: event.target.value }))} />
+                <span className="section-title__meta">Minimum recommended: {MIN_CRAWLER_SLEEP_SECONDS} seconds. Use a higher value if the source starts throttling.</span>
               </label>
               <label className="field">
                 <span>Start</span>
                 <input className="input" type="date" value={crawlerForm.start} onChange={(event) => setCrawlerForm((current) => ({ ...current, start: event.target.value }))} />
+              </label>
+              <label className="field">
+                <span>Start mode</span>
+                <select className="select" value={crawlerForm.start_mode} onChange={(event) => setCrawlerForm((current) => ({ ...current, start_mode: event.target.value as CrawlerStartModeValue }))}>
+                  {crawlerStartModeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="section-title__meta">{crawlerStartModeOptions.find((option) => option.value === crawlerForm.start_mode)?.description}</span>
               </label>
               {crawlerTaskUsesEndDate ? (
                 <label className="field">
@@ -527,7 +704,7 @@ export function AdminPage() {
               ) : (
                 <div className="field">
                   <span>End</span>
-                  <span className="section-title__meta">This task uses its own end-date logic and ignores the field.</span>
+                  <span className="section-title__meta">This task uses its own end-date logic, so the field is hidden.</span>
                 </div>
               )}
             </div>
@@ -575,14 +752,28 @@ export function AdminPage() {
           <div className="section-title">
             <div>
               <p className="eyebrow">Datasets</p>
-              <h3>Export and inspect registered CSV sources</h3>
-              <p className="section-title__meta">Keep the source catalog in one place and export the CSV backing files from here.</p>
+              <h3>Catalog and export data sources</h3>
+              <p className="section-title__meta">Keep the catalog concise with clear labels, sync status, and export actions.</p>
             </div>
           </div>
-          <div className="timeline-list">
+
+          <div className="metric-grid metric-grid--compact dataset-summary-grid">
+            <article className="metric-card">
+              <span className="metric-card__label">History CSV</span>
+              <strong className="metric-card__value">{datasets.find((dataset) => dataset.code === 'sjc-history-csv')?.name ?? 'n/a'}</strong>
+              <span className="metric-card__meta">Primary chart and prediction dataset</span>
+            </article>
+            <article className="metric-card">
+              <span className="metric-card__label">Crawler export</span>
+              <strong className="metric-card__value">{datasets.find((dataset) => dataset.code === 'crawler-export-csv')?.name ?? 'n/a'}</strong>
+              <span className="metric-card__meta">Used by the crawler export flow</span>
+            </article>
+          </div>
+
+          <div className="dataset-catalog">
             {datasets.map((dataset) => (
-              <div key={dataset.id} className="timeline-item">
-                <div className="timeline-item__head">
+              <article key={dataset.id} className="dataset-card">
+                <div className="dataset-card__head">
                   <div>
                     <strong>{dataset.name}</strong>
                     <p>{dataset.code}</p>
@@ -592,11 +783,16 @@ export function AdminPage() {
                     <span className={`badge ${dataset.is_active ? 'badge--positive' : 'badge--neutral'}`}>{dataset.is_active ? 'active' : 'inactive'}</span>
                   </div>
                 </div>
-                <p>{dataset.csv_path}</p>
+                <p className="dataset-card__description">{dataset.description ?? 'No description available.'}</p>
+                <div className="dataset-card__meta-row">
+                  <span className="badge badge--neutral">{dataset.source_type}</span>
+                  <span className="badge badge--neutral">{dataset.file_format}</span>
+                  {dataset.last_synced_at ? <span className="badge badge--neutral">Synced {formatDateTime(dataset.last_synced_at)}</span> : null}
+                </div>
                 <button type="button" className="button button--ghost" onClick={() => void handleDatasetExport(dataset)} disabled={busy === `dataset-${dataset.id}`}>
-                  Export CSV
+                  Download CSV
                 </button>
-              </div>
+              </article>
             ))}
           </div>
         </article>

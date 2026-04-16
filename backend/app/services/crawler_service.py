@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +19,7 @@ from app.schemas.crawler import CrawlerRunCreate
 
 
 MAX_OUTPUT_CHARS = 20000
+LOG_POLL_INTERVAL_SECONDS = 0.75
 MAX_WORKERS = 2
 logger = logging.getLogger(__name__)
 _crawler_executor = ThreadPoolExecutor(max_workers=MAX_WORKERS, thread_name_prefix="crawler-worker")
@@ -37,15 +39,57 @@ def _build_report_output_path(run_id: int) -> Path:
     return (reports_dir / f"crawler_report_run_{run_id}.txt").resolve()
 
 
-def _build_crawler_command(payload: CrawlerRunCreate, *, report_output_path: str | None = None) -> list[str]:
+def _build_run_log_path(run_id: int) -> Path:
+    logs_dir = Path(settings.GOLD_CLI_CONFIG_PATH).resolve().parent / "logs" / "crawler-runs"
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return (logs_dir / f"crawler_run_{run_id}_{timestamp}.log").resolve()
+
+
+def _read_log_tail(log_path: Path) -> str:
+    if not log_path.exists():
+        return ""
+
+    try:
+        content = log_path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+    if len(content) > MAX_OUTPUT_CHARS:
+        return content[-MAX_OUTPUT_CHARS:]
+    return content
+
+
+def _refresh_run_output(db: Session, run: CrawlerRun, log_path: Path) -> bool:
+    snapshot = _read_log_tail(log_path)
+    if not snapshot or snapshot == (run.output_text or ""):
+        return False
+
+    run.output_text = snapshot
+    db.commit()
+    return True
+
+
+def _build_crawler_command(
+    payload: CrawlerRunCreate,
+    *,
+    report_output_path: str | None = None,
+    log_file_path: str | None = None,
+) -> list[str]:
     command = [
         sys.executable,
         "-m",
         settings.GOLD_CLI_MODULE,
         "--config",
         settings.GOLD_CLI_CONFIG_PATH,
-        payload.task.value,
     ]
+
+    if log_file_path:
+        command.extend(["--log-file", log_file_path])
+
+    if payload.start_mode:
+        command.extend(["--start-mode", payload.start_mode.value])
+
+    command.append(payload.task.value)
 
     if payload.start:
         command.extend(["--start", payload.start.isoformat()])
@@ -87,24 +131,40 @@ def _run_crawler_task_in_background(run_id: int, payload_data: dict[str, Any]) -
         db.commit()
 
         command_payload = _serialize_payload(payload)
+        log_file_path = _build_run_log_path(run.id)
+        log_file_path.parent.mkdir(parents=True, exist_ok=True)
+        command_payload["log_file_path"] = str(log_file_path)
         report_output_path: Path | None = None
         if payload.task.value == "report":
             report_output_path = _build_report_output_path(run.id)
             command_payload["report_output_path"] = str(report_output_path)
-            run.params_json = command_payload
-            db.commit()
 
-        completed = subprocess.run(
-            _build_crawler_command(payload, report_output_path=str(report_output_path) if report_output_path else None),
+        run.params_json = command_payload
+        db.commit()
+
+        process = subprocess.Popen(
+            _build_crawler_command(
+                payload,
+                report_output_path=str(report_output_path) if report_output_path else None,
+                log_file_path=str(log_file_path),
+            ),
             cwd=str(Path(settings.PROJECT_ROOT)),
-            capture_output=True,
-            text=True,
-            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
-        run.exit_code = completed.returncode
-        run.output_text = (completed.stdout or "")[:MAX_OUTPUT_CHARS]
-        run.error_text = (completed.stderr or "")[:MAX_OUTPUT_CHARS] or None
-        run.status = "success" if completed.returncode == 0 else "failed"
+
+        while True:
+            _refresh_run_output(db, run, log_file_path)
+            return_code = process.poll()
+            if return_code is not None:
+                break
+            time.sleep(LOG_POLL_INTERVAL_SECONDS)
+
+        _refresh_run_output(db, run, log_file_path)
+        run.exit_code = return_code
+        run.status = "success" if return_code == 0 else "failed"
+        if return_code != 0 and not run.error_text:
+            run.error_text = run.output_text or f"Crawler process exited with code {return_code}."
     except Exception as exc:
         logger.exception("Crawler task %s failed", run_id)
         if run is not None:

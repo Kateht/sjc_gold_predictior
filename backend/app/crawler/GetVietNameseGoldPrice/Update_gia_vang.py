@@ -580,6 +580,24 @@ def load_xauusd_ohlc_cache(start_date, end_date, *, max_file_age_hours: float = 
         age_seconds = time.time() - os.path.getmtime(cache_path)
         need_download = age_seconds > (max_file_age_hours * 3600.0)
 
+    def _write_empty_cache() -> None:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Date", "Open", "High", "Low", "Close", "Adj Close", "Volume"])
+
+    def _cache_has_required_headers() -> bool:
+        if not os.path.exists(cache_path) or os.path.getsize(cache_path) <= 0:
+            return False
+
+        try:
+            with open(cache_path, "r", encoding="utf-8", newline="") as f:
+                header = f.readline().strip().lower()
+        except Exception:
+            return False
+
+        return header.startswith("date,") and all(column in header for column in ("open", "high", "low", "close"))
+
     if need_download:
         url = "https://stooq.com/q/d/l/"
         params = {"s": "xauusd", "i": "d"}
@@ -589,11 +607,9 @@ def load_xauusd_ohlc_cache(start_date, end_date, *, max_file_age_hours: float = 
         head = (csv_text or "").strip().splitlines()[:1]
         looks_like_csv = bool(head) and head[0].strip().lower().startswith("date,")
         if not looks_like_csv:
-            if os.path.exists(cache_path) and os.path.getsize(cache_path) > 0:
-                # Keep existing cache.
-                pass
-            else:
-                raise RuntimeError("Stooq returned empty/invalid XAUUSD CSV")
+            if not _cache_has_required_headers():
+                _write_empty_cache()
+            print("Warning: Stooq returned invalid XAUUSD CSV; using the local cache fallback.")
         else:
             with open(cache_path, "w", encoding="utf-8", newline="") as f:
                 f.write(csv_text)

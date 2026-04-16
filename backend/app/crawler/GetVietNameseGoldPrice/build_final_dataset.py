@@ -822,6 +822,50 @@ def _write_csv_atomically(frame: pd.DataFrame, output_path: Path) -> None:
     os.replace(temp_path, output_path)
 
 
+def _merge_with_existing_output(frame: pd.DataFrame, output_path: Path) -> pd.DataFrame:
+    if not output_path.exists() or output_path.stat().st_size <= 0:
+        return frame.copy()
+
+    try:
+        existing = pd.read_csv(output_path)
+    except Exception:
+        return frame.copy()
+
+    if "Date" not in existing.columns:
+        return frame.copy()
+
+    existing = existing.copy()
+    existing["Date"] = pd.to_datetime(existing["Date"], errors="coerce")
+    existing = existing.dropna(subset=["Date"]).sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
+
+    new_frame = frame.copy()
+    new_frame["Date"] = pd.to_datetime(new_frame["Date"], errors="coerce")
+    new_frame = new_frame.dropna(subset=["Date"]).sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
+
+    for column in FINAL_DATASET_COLUMNS:
+        if column not in existing.columns:
+            existing[column] = np.nan
+        if column not in new_frame.columns:
+            new_frame[column] = np.nan
+
+    existing = existing[FINAL_DATASET_COLUMNS].copy().set_index("Date")
+    new_frame = new_frame[FINAL_DATASET_COLUMNS].copy().set_index("Date")
+
+    merged = new_frame.combine_first(existing)
+    merged = merged.reset_index().sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
+    merged["Date"] = pd.to_datetime(merged["Date"], errors="coerce").dt.strftime("%Y-%m-%d")
+    merged = merged[FINAL_DATASET_COLUMNS]
+    numeric_columns = [column for column in FINAL_DATASET_COLUMNS if column != "Date"]
+    merged[numeric_columns] = merged[numeric_columns].apply(pd.to_numeric, errors="coerce")
+    return merged
+
+
+def _build_backup_path(output_path: Path) -> Path:
+    if output_path.name.endswith(".bak.csv"):
+        return output_path
+    return output_path.with_name(f"{output_path.stem}.bak{output_path.suffix}")
+
+
 def _engineer_final_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy().sort_values("Date").reset_index(drop=True)
 
@@ -904,7 +948,11 @@ def _build_from_cached_dataset(
 
 
 def _write_and_return(frame: pd.DataFrame, output_path: Path) -> Path:
-    _write_csv_atomically(frame, output_path)
+    merged_frame = _merge_with_existing_output(frame, output_path)
+    _write_csv_atomically(merged_frame, output_path)
+    backup_path = _build_backup_path(output_path)
+    if backup_path != output_path:
+        _write_csv_atomically(merged_frame, backup_path)
     return output_path
 
 
@@ -924,6 +972,8 @@ def build_final_dataset(
     source_frames: dict[str, pd.DataFrame] = {}
     source_health: dict[str, SourceHealth] = {}
 
+    print(f"Progress: 5% - Loading raw SJC source from {raw_path}")
+
     try:
         sjc = _load_raw_gold_frame(raw_path, start_ts, end_ts)
     except Exception as exc:
@@ -940,6 +990,7 @@ def build_final_dataset(
 
     source_frames["RAW_SJC"] = sjc.copy()
     df = sjc.copy()
+    print(f"Progress: 15% - Raw SJC source loaded ({len(df)} rows)")
 
     macro_frames: list[pd.DataFrame] = []
     macro_source_candidates = (
@@ -996,7 +1047,9 @@ def build_final_dataset(
         ),
     )
 
-    for source_key, target_column, candidates in macro_source_candidates:
+    print("Progress: 25% - Resolving macro series")
+
+    for index, (source_key, target_column, candidates) in enumerate(macro_source_candidates, start=1):
         frame, health = _resolve_macro_series_candidates(
             target_column,
             candidates,
@@ -1007,13 +1060,15 @@ def build_final_dataset(
         source_frames[source_key] = frame.copy()
         source_health[source_key] = health
         macro_frames.append(frame)
+        print(f"Progress: {25 + index * 10}% - {target_column} series resolved")
 
     fred = macro_frames[0]
     for frame in macro_frames[1:]:
         fred = fred.merge(frame, on="Date", how="outer")
 
+    print("Progress: 55% - Resolving market series")
     market_frames: list[pd.DataFrame] = []
-    for ticker, prefix, columns in YFINANCE_SERIES:
+    for index, (ticker, prefix, columns) in enumerate(YFINANCE_SERIES, start=1):
         source_key = f"YFINANCE:{ticker}"
         try:
             frame, missing_columns = _download_yfinance_frame(ticker, start_ts, end_ts, columns)
@@ -1033,6 +1088,8 @@ def build_final_dataset(
         renamed_frame = _rename_market_columns(frame, prefix, columns)
         source_frames[source_key] = renamed_frame.copy()
         market_frames.append(renamed_frame)
+        if index in {3, 6, 9}:
+            print(f"Progress: {55 + index * 2}% - {ticker} market series prepared")
 
     for market_frame in market_frames:
         df = df.merge(market_frame, on="Date", how="left")
@@ -1040,6 +1097,7 @@ def build_final_dataset(
     df = df.merge(fred, on="Date", how="left")
     df = df.sort_values("Date").reset_index(drop=True)
     df = _apply_source_imputation(df, source_frames=source_frames, cached_frame=cached_frame)
+    print(f"Progress: 78% - Source imputation complete ({len(df)} rows)")
 
     preflight_entries = _build_preflight_entries(source_health, start_ts=start_ts, end_ts=end_ts)
     if preflight_entries:
@@ -1128,8 +1186,10 @@ def build_final_dataset(
         _write_csv_atomically(empty_out, output_path)
         return output_path
 
-    _write_csv_atomically(engineered, output_path)
+    print(f"Progress: 90% - Feature engineering produced {len(engineered)} rows")
+    _write_and_return(engineered, output_path)
     log_entries.append(_format_log_entry(SUMMARY_LOG_DATE, "ALL", [], f"Wrote {len(engineered)} complete rows to {output_path}"))
     _append_missing_data_log(log_entries, start_ts=start_ts, end_ts=end_ts)
     print(f"Missing-column log: {FINAL_DATASET_MISSING_LOG_PATH}")
+    print(f"Progress: 100% - Final dataset written to {output_path}")
     return output_path

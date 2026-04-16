@@ -33,6 +33,8 @@ services:
       UVICORN_WORKERS: "1"
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend/dataset:/app/dataset
     security_opt:
       - no-new-privileges:true
     cap_drop:

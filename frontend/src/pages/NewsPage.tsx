@@ -154,7 +154,7 @@ export function NewsPage() {
         </div>
 
         {detailError ? <div className="error-state">{detailError}</div> : null}
-        {!selectedArticle && !detailLoading ? <div className="empty-state">Click any article card to fetch `/api/v1/news/articles/{'{'}slug{'}'}` and view its details here.</div> : null}
+        {!selectedArticle && !detailLoading ? <div className="empty-state">Click any article card to view its details.</div> : null}
 
         {selectedArticle ? (
           <article className="news-detail__article">
