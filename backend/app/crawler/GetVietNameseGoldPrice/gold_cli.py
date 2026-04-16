@@ -7,7 +7,6 @@ import io
 import json
 import os
 import sys
-from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -433,18 +432,10 @@ def _load_csv_date_index(csv_path: Path) -> tuple[pd.DatetimeIndex | None, str |
 
 
 def _find_report_start_date(config: dict) -> date:
-    earliest: date | None = None
-    for path in _collect_report_targets(config):
-        date_index, _ = _load_csv_date_index(path)
-        if date_index is None or len(date_index) == 0:
-            continue
-
-        candidate = date_index.min().date()
-        if earliest is None or candidate < earliest:
-            earliest = candidate
-
-    if earliest is not None:
-        return earliest
+    csv_path = Path(config["csv_path"])
+    date_index, _ = _load_csv_date_index(csv_path)
+    if date_index is not None and len(date_index):
+        return date_index.min().date()
 
     return _parse_date(str(config["default_start_date"]), default=date.today())
 
@@ -715,52 +706,132 @@ def _render_csv_coverage_lines(
     return lines
 
 
+def _summarize_csv_file_lines(label: str, csv_path: Path, *, note: str | None = None) -> list[str]:
+    lines = [f"- {label}: {csv_path}"]
+    if note:
+        lines.append(f"  note: {note}")
+
+    if not csv_path.exists():
+        lines.append("  status: missing")
+        return lines
+
+    try:
+        frame = pd.read_csv(csv_path)
+    except Exception as exc:
+        lines.append(f"  status: unreadable ({exc})")
+        return lines
+
+    lines.append("  status: ready")
+    lines.append(f"  rows: {len(frame)}")
+
+    date_index, date_col = _load_csv_date_index(csv_path)
+    if date_index is not None and date_col is not None and len(date_index):
+        lines.append(f"  date column: {date_col}")
+        lines.append(f"  range: {date_index.min().date().strftime('%d/%m/%Y')} -> {date_index.max().date().strftime('%d/%m/%Y')}")
+    else:
+        lines.append("  date column: not available")
+
+    lines.append(f"  missing cells: {int(frame.isna().sum().sum())}")
+    lines.append(f"  all-NaN rows: {int(frame.isna().all(axis=1).sum())}")
+    lines.append(f"  empty columns: {int(frame.isna().all(axis=0).sum())}")
+    return lines
+
+
+def _build_raw_gold_report_lines(csv_path: Path, *, start: date, end: date) -> list[str]:
+    lines = ["Raw source audit:"]
+
+    if not csv_path.exists():
+        lines.append(f"- {csv_path}: missing")
+        return lines
+
+    try:
+        frame = pd.read_csv(csv_path)
+    except Exception as exc:
+        lines.append(f"- {csv_path}: unreadable ({exc})")
+        return lines
+
+    date_column = None
+    if "Ngày" in frame.columns:
+        date_column = "Ngày"
+    elif "Date" in frame.columns:
+        date_column = "Date"
+
+    if not date_column:
+        lines.append(f"- {csv_path}: no date column detected")
+        return lines
+
+    frame = frame.copy()
+    frame[date_column] = pd.to_datetime(frame[date_column], dayfirst=True, errors="coerce")
+    frame = frame.dropna(subset=[date_column]).copy()
+
+    check_columns = [column for column in getattr(ug, "ALL_COLS", []) if column in frame.columns]
+    if not check_columns:
+        check_columns = [column for column in frame.columns if column != date_column]
+
+    for column in check_columns:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+
+    frame = frame.drop_duplicates(subset=[date_column], keep="first").set_index(date_column)
+    all_days = pd.date_range(start=pd.to_datetime(start), end=pd.to_datetime(end), freq="D")
+    frame = frame.reindex(all_days)
+
+    missing_all = frame[check_columns].isna().all(axis=1) if check_columns else frame.isna().all(axis=1)
+    missing_any = frame[check_columns].isna().any(axis=1) if check_columns else frame.isna().any(axis=1)
+
+    lines.append(f"- Source CSV: {csv_path}")
+    lines.append(f"  checked columns: {len(check_columns)}")
+    lines.append(f"  window: {start.strftime('%d/%m/%Y')} -> {end.strftime('%d/%m/%Y')}")
+    lines.append(f"  days missing all checked columns: {int(missing_all.sum())}")
+    if missing_all.any():
+        sample_all = frame.index[missing_all][:10]
+        sample_text = ", ".join(timestamp.strftime('%d/%m/%Y') for timestamp in sample_all)
+        if len(sample_all) == 10 and int(missing_all.sum()) > 10:
+            sample_text += " ..."
+        lines.append(f"  sample all-missing dates: {sample_text}")
+    lines.append(f"  days missing at least one checked column: {int(missing_any.sum())}")
+    if missing_any.any():
+        sample_any = frame.index[missing_any][:10]
+        sample_text = ", ".join(timestamp.strftime('%d/%m/%Y') for timestamp in sample_any)
+        if len(sample_any) == 10 and int(missing_any.sum()) > 10:
+            sample_text += " ..."
+        lines.append(f"  sample partial-missing dates: {sample_text}")
+
+    return lines
+
+
 def _build_dataset_report_text(config: dict, *, start: date, end: date) -> str:
-    audit_targets = _collect_report_targets(config)
-    audit_results = [_audit_csv_file(path) for path in audit_targets]
-    scope_counts = Counter(result.scope for result in audit_results)
-    status_counts = Counter(result.status_kind for result in audit_results)
+    raw_source_path = Path(config["csv_path"])
+    final_dataset_path = Path(settings.LOCAL_DATASET_PATH)
+    final_dataset_backup_path = final_dataset_path.with_suffix(".bak.csv")
+    crawler_export_path = Path(settings.CRAWLER_DATASET_PATH)
+    merged_market_path = Path(settings.PROJECT_ROOT) / "app/crawler/GetVietNameseGoldPrice/final_uso_with_vn_gold_vnd_thousand_imputed.csv"
 
     report_lines = [
         "Crawler audit report",
         f"Generated at: {datetime.now().isoformat(timespec='seconds')}",
-        f"Current day: {date.today().isoformat()}",
-        f"Requested window: {start.strftime('%d/%m/%Y')} -> {end.strftime('%d/%m/%Y')}",
-        "Scope: every CSV data file is checked individually. Cache files may skip non-trading days, so calendar gaps are informational for those files.",
-        "",
-        "Summary:",
-        f"- Files audited: {len(audit_results)}",
-        f"- Primary data files: {scope_counts.get('Primary data files', 0)}",
-        f"- Cache files: {scope_counts.get('Cache files', 0)}",
-        f"- Dataset snapshots: {scope_counts.get('Dataset snapshots', 0)}",
-        f"- Ok: {status_counts.get('ok', 0)}",
-        f"- Stale: {status_counts.get('stale', 0)}",
-        f"- Needs attention: {status_counts.get('needs-attention', 0)}",
-        f"- Snapshot: {status_counts.get('snapshot', 0)}",
-        f"- Missing: {status_counts.get('missing', 0)}",
-        f"- Unreadable: {status_counts.get('unreadable', 0)}",
-        f"- Empty: {status_counts.get('empty', 0)}",
-        f"- No date column: {status_counts.get('no-date', 0)}",
+        f"Source CSV: {raw_source_path}",
+        f"Range: {start.strftime('%d/%m/%Y')} -> {end.strftime('%d/%m/%Y')}",
         "",
     ]
 
-    grouped_results: dict[str, list[CsvAuditResult]] = {
-        "Primary data files": [],
-        "Cache files": [],
-        "Dataset snapshots": [],
-    }
-    for result in audit_results:
-        grouped_results.setdefault(result.scope, []).append(result)
+    report_lines.extend(_build_raw_gold_report_lines(raw_source_path, start=start, end=end))
+    report_lines.append("")
+    report_lines.append("Training dataset:")
+    report_lines.extend(_summarize_csv_file_lines("final_dataset.csv", final_dataset_path, note="train file"))
+    report_lines.extend(_summarize_csv_file_lines("final_dataset.bak.csv", final_dataset_backup_path, note="backup mirror"))
+    report_lines.append("")
+    report_lines.append("Export datasets:")
+    report_lines.extend(_summarize_csv_file_lines("sjc-history-csv", final_dataset_path, note="UI export for historical SJC/world data"))
+    report_lines.extend(_summarize_csv_file_lines("crawler-export-csv", crawler_export_path, note="UI export for crawler source data"))
+    report_lines.extend(_summarize_csv_file_lines("merged-market-csv", merged_market_path, note="UI export for merged market data"))
 
-    for scope in ("Primary data files", "Cache files", "Dataset snapshots"):
-        results = grouped_results.get(scope, [])
-        if not results:
-            continue
-
-        report_lines.append(f"{scope}:")
-        for result in results:
-            report_lines.extend(_format_csv_audit_result(result))
-            report_lines.append("")
+    report_lines.append("")
+    report_lines.extend([
+        "Notes:",
+        "- Raw source audit is read-only and does not rewrite data.",
+        "- Training dataset and export sections summarize the current workspace files used by the UI.",
+    ]
+    )
 
     return "\n".join(report_lines).rstrip() + "\n"
 
@@ -1299,7 +1370,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--quiet", action="store_true", default=None, help="Less logging")
     sp.set_defaults(func=cmd_pipeline)
 
-    sp = sub.add_parser("report", help="Audit all CSV data files and caches with per-file range/status")
+    sp = sub.add_parser("report", help="Audit the raw gold CSV, train dataset, and export files")
     sp.add_argument("--start", default=None, help=f"Start date ({DATE_HINT}); default=config")
     sp.add_argument("--end", default=None, help=f"End date ({DATE_HINT}); default=today")
     sp.add_argument("--report-output", default=None, help="Write the audit report artifact to this path")

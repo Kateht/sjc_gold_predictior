@@ -34,7 +34,7 @@ const initialCrawlerForm = {
 const crawlerTaskMeta = {
   report: {
     label: '1. Dataset Report',
-    description: 'Audit every CSV data file and cache, showing each file\'s date range, continuity, freshness, and status.',
+    description: 'Audit the raw PNJ/SJC source, the final_dataset train files, and the export datasets in one concise report.',
     endDate: true,
   },
   update: {
@@ -58,7 +58,7 @@ const crawlerWorkflowCards = [
   {
     task: 'report',
     title: '1. Dataset Report',
-    description: 'Audit every CSV file and cache with its own date range and status.',
+    description: 'Audit the raw source, final_dataset, and export files in one concise report.',
   },
   {
     task: 'final-dataset',
@@ -657,7 +657,7 @@ export function AdminPage() {
               </div>
               <span className="badge badge--neutral">Guide</span>
             </div>
-            <p>1. Use <strong>Dataset Report</strong> when you want to audit every CSV file and cache with its own range, continuity, freshness, and status.</p>
+            <p>1. Use <strong>Dataset Report</strong> when you want a concise audit of the raw PNJ/SJC source, final_dataset, and the export files.</p>
             <p>2. Use <strong>Update Vietnamese gold</strong> for PNJ/SJC refreshes; cache and outputs are rebuilt automatically.</p>
             <p>3. Use <strong>Update world gold and market dataset</strong> for the XAU/USD cache and market outputs.</p>
             <p>4. Use <strong>Build ML training dataset</strong> when you want the full chain, including tasks 2 and 3, plus final_dataset.csv.</p>
